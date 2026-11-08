@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Clip, MediaItem, Timeline, TrackType } from '../lib/types';
 
 interface TimelineViewProps {
@@ -28,6 +28,8 @@ export function TimelineView({
   const [pxPerSec, setPxPerSec] = useState<number>(45);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [isAddingClip, setIsAddingClip] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   // New clip form state
   const [newTrack, setNewTrack] = useState<TrackType>('V1');
@@ -37,13 +39,58 @@ export function TimelineView({
   const [newDur, setNewDur] = useState<number>(3);
   const [newSpeed, setNewSpeed] = useState<number>(1.0);
 
+  const rulerRef = useRef<HTMLDivElement>(null);
+
   // Calculate total timeline length in seconds
   const maxTime = Math.max(
     15,
     ...timeline.clips.map((c) => c.start + c.dur + 2)
   );
 
+  // Playhead playback loop
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const interval = setInterval(() => {
+      setCurrentTime((prev) => {
+        if (prev >= maxTime) {
+          setIsPlaying(false);
+          return 0;
+        }
+        return Math.min(maxTime, prev + 0.1);
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, maxTime]);
+
+  // Spacebar toggle playback (when not typing in an input)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const selectedClip = timeline.clips.find((c) => c.id === selectedClipId);
+
+  // Find active clips under current playhead (highest priority: V2 > V1, A1, CC)
+  const activeClips = timeline.clips.filter(
+    (c) => currentTime >= c.start && currentTime <= c.start + c.dur
+  );
+  const activeVideoClip =
+    activeClips.find((c) => c.track === 'V2') ||
+    activeClips.find((c) => c.track === 'V1');
+  const activeAudioClip = activeClips.find((c) => c.track === 'A1');
+  const activeEffectClip = activeClips.find((c) => c.track === 'CC');
 
   const handleUpdateSelectedClip = (field: keyof Clip, value: any) => {
     if (!editable || !onUpdateTimeline || !selectedClipId) return;
@@ -84,6 +131,65 @@ export function TimelineView({
     setSelectedClipId(newClip.id);
   };
 
+  // Split clip at playhead
+  const handleSplitAtPlayhead = () => {
+    if (!editable || !onUpdateTimeline) return;
+
+    // Split selected clip if playhead is within it, or split whatever clip is under playhead
+    const targetClip = selectedClip && currentTime > selectedClip.start && currentTime < selectedClip.start + selectedClip.dur
+      ? selectedClip
+      : activeVideoClip || activeClips[0];
+
+    if (!targetClip) return;
+    if (currentTime <= targetClip.start || currentTime >= targetClip.start + targetClip.dur) return;
+
+    const splitOffset = currentTime - targetClip.start;
+    const firstDur = splitOffset;
+    const secondDur = targetClip.dur - splitOffset;
+
+    const firstSourceOut = targetClip.sourceIn + splitOffset * targetClip.speed;
+
+    const firstClip: Clip = {
+      ...targetClip,
+      dur: firstDur,
+      sourceOut: firstSourceOut,
+    };
+
+    const secondClip: Clip = {
+      ...targetClip,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
+      start: currentTime,
+      dur: secondDur,
+      sourceIn: firstSourceOut,
+    };
+
+    const updated = timeline.clips.map((c) => (c.id === targetClip.id ? firstClip : c));
+    updated.push(secondClip);
+
+    onUpdateTimeline({ clips: updated });
+    setSelectedClipId(secondClip.id);
+  };
+
+  // Ruler click to seek
+  const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const clickX = e.clientX - rect.left - 96; // 96px is track label width
+    if (clickX >= 0) {
+      const soughtTime = Math.max(0, Math.min(maxTime, clickX / pxPerSec));
+      setCurrentTime(parseFloat(soughtTime.toFixed(2)));
+    }
+  };
+
+  // Export timeline as JSON
+  const handleExportJSON = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(timeline, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute('href', dataStr);
+    dlAnchor.setAttribute('download', `timeline_${Date.now()}.json`);
+    dlAnchor.click();
+  };
+
   // Generate ruler tick marks
   const tickInterval = pxPerSec >= 60 ? 1 : pxPerSec >= 30 ? 2 : 5;
   const tickCount = Math.ceil(maxTime / tickInterval);
@@ -100,7 +206,44 @@ export function TimelineView({
           </span>
         </div>
 
+        {/* Playback Controls & HUD */}
         <div className="flex items-center space-x-2">
+          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+            <button
+              type="button"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold transition flex items-center gap-1"
+              title="Spacebar to toggle play"
+            >
+              <span>{isPlaying ? '❚❚' : '▶'}</span>
+              <span className="text-[11px] font-mono">{currentTime.toFixed(1)}s</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsPlaying(false);
+                setCurrentTime(0);
+              }}
+              className="px-2 py-1 text-slate-300 hover:text-white transition"
+              title="Return to start"
+            >
+              ⏮
+            </button>
+          </div>
+
+          {/* Split at playhead button */}
+          {editable && onUpdateTimeline && (
+            <button
+              type="button"
+              onClick={handleSplitAtPlayhead}
+              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1"
+              title="Split clip at playhead"
+            >
+              <span>✂</span>
+              <span>Split</span>
+            </button>
+          )}
+
           {/* Zoom controls */}
           <div className="flex items-center bg-slate-800 rounded-lg p-0.5 text-xs text-slate-300">
             <button
@@ -122,6 +265,15 @@ export function TimelineView({
             </button>
           </div>
 
+          <button
+            type="button"
+            onClick={handleExportJSON}
+            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition"
+            title="Export Timeline as JSON"
+          >
+            Export JSON
+          </button>
+
           {editable && onUpdateTimeline && (
             <button
               type="button"
@@ -131,6 +283,39 @@ export function TimelineView({
               {isAddingClip ? 'Cancel' : '+ Add Clip'}
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Monitor HUD preview */}
+      <div className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+        <div className="flex items-center space-x-3">
+          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Playhead Monitor:</span>
+          {activeVideoClip ? (
+            <span className="inline-flex items-center gap-1.5 font-medium text-slate-200">
+              <span className={`w-2 h-2 rounded-full ${activeVideoClip.track === 'V2' ? 'bg-purple-400' : 'bg-blue-400'}`}></span>
+              <span>[{activeVideoClip.track}] {activeVideoClip.name}</span>
+            </span>
+          ) : (
+            <span className="text-slate-600 italic">No video clip active at {currentTime.toFixed(1)}s</span>
+          )}
+
+          {activeAudioClip && (
+            <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px]">
+              <span>♫</span>
+              <span>{activeAudioClip.name}</span>
+            </span>
+          )}
+
+          {activeEffectClip && (
+            <span className="inline-flex items-center gap-1 text-amber-400 text-[11px]">
+              <span>✦</span>
+              <span>{activeEffectClip.name}</span>
+            </span>
+          )}
+        </div>
+
+        <div className="font-mono text-[11px] text-slate-400">
+          Position: <strong className="text-white">{currentTime.toFixed(2)}s</strong> / {maxTime.toFixed(1)}s
         </div>
       </div>
 
@@ -215,10 +400,17 @@ export function TimelineView({
       )}
 
       {/* Timeline Tracks Display */}
-      <div className="overflow-x-auto relative">
-        <div style={{ width: `${Math.max(800, maxTime * pxPerSec + 150)}px` }} className="min-w-full">
+      <div className="overflow-x-auto relative select-none">
+        <div
+          ref={rulerRef}
+          style={{ width: `${Math.max(800, maxTime * pxPerSec + 150)}px` }}
+          className="min-w-full relative"
+        >
           {/* Ruler */}
-          <div className="h-7 bg-slate-950 border-b border-slate-800 flex items-center relative pl-24">
+          <div
+            onClick={handleRulerClick}
+            className="h-7 bg-slate-950 border-b border-slate-800 flex items-center relative pl-24 cursor-pointer"
+          >
             <div className="absolute left-0 top-0 bottom-0 w-24 bg-slate-950 border-r border-slate-800 text-[10px] text-slate-500 uppercase font-semibold flex items-center px-2">
               Time (s)
             </div>
@@ -226,11 +418,19 @@ export function TimelineView({
               <div
                 key={t}
                 className="absolute top-0 bottom-0 flex flex-col justify-end text-[10px] font-mono text-slate-500 border-l border-slate-800 pl-1"
-                style={{ left: `${24 * 4 + t * pxPerSec}px` }}
+                style={{ left: `${96 + t * pxPerSec}px` }}
               >
                 <span>{t}s</span>
               </div>
             ))}
+          </div>
+
+          {/* Red Playhead Line */}
+          <div
+            style={{ left: `${96 + currentTime * pxPerSec}px` }}
+            className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-30 pointer-events-none shadow-sm"
+          >
+            <div className="w-2.5 h-2.5 bg-rose-500 -ml-1 rounded-full shadow"></div>
           </div>
 
           {/* Tracks */}
@@ -419,4 +619,3 @@ export function TimelineView({
     </div>
   );
 }
-

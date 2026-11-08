@@ -1,4 +1,40 @@
 import { Project } from './types';
+import { buildPlaceholderSampleTimeline } from './buildTimeline';
+
+/**
+ * Builds a sample project with a timeline of 6 placeholder clips with no media (colored boxes only)
+ */
+export function createPlaceholderSampleProject(): Project {
+  const projectId = 'sample-placeholders-6';
+  const timeline = buildPlaceholderSampleTimeline(); // Exactly 6 placeholder clips with mediaId: null
+
+  return {
+    id: projectId,
+    name: 'Placeholder Cut (6 Clips)',
+    media: [],
+    snapshots: [
+      {
+        id: 'snap-placeholder-initial',
+        parentId: null,
+        author: 'Lead Editor',
+        message: 'Assembly of 6 Colored Placeholder Clips',
+        createdAt: new Date().toISOString(),
+        timeline,
+      },
+    ],
+    variations: [
+      {
+        id: 'var-placeholder-cut',
+        name: 'Overlay Cut Variation',
+        author: 'Jordan (Collaborator)',
+        baseSnapshotId: 'snap-placeholder-initial',
+        status: 'editing',
+        timeline: JSON.parse(JSON.stringify(timeline)),
+      },
+    ],
+    reviews: [],
+  };
+}
 
 export function createSampleProject(): Project {
   const projectId = 'sample-summer-reel';
@@ -168,4 +204,3 @@ export function createSampleProject(): Project {
     ],
   };
 }
-

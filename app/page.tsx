@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Header } from '../components/Header';
 import { Project } from '../lib/types';
 import { listProjects, saveProject, deleteProject } from '../lib/store';
-import { createSampleProject } from '../lib/sample';
+import { createSampleProject, createPlaceholderSampleProject } from '../lib/sample';
 import { CHANNEL_NAME, SyncMessage } from '../lib/sync';
 
 export default function HomePage() {
@@ -81,7 +81,15 @@ export default function HomePage() {
     router.push(`/lead/${projectId}`);
   };
 
-  const handleLoadSample = () => {
+  // 'Load sample project' button: builds a timeline of 6 placeholder clips with no media (colored boxes only)
+  const handleLoadSampleProject = () => {
+    const sample = createPlaceholderSampleProject();
+    saveProject(sample);
+    refreshList();
+    router.push(`/lead/${sample.id}`);
+  };
+
+  const handleLoadSummerReel = () => {
     const sample = createSampleProject();
     saveProject(sample);
     refreshList();
@@ -110,7 +118,7 @@ export default function HomePage() {
           </h1>
           <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-400">
             Git-style version control for multi-track video editing. Create snapshots, branch variations,
-            and review timeline changes in real-time across browser tabs using BroadcastChannel and IndexedDB.
+            drop .mp4/.mp3/.wav files, and preview playback seamlessly across browser tabs.
           </p>
         </div>
 
@@ -124,7 +132,7 @@ export default function HomePage() {
               </div>
               <h2 className="text-lg font-bold text-white mb-1">Create New Project</h2>
               <p className="text-xs text-slate-400 mb-4">
-                Start a fresh multi-track video project with an empty base timeline and your own media pool.
+                Start a fresh multi-track video project with an empty base timeline, dropzone for media, and live player.
               </p>
             </div>
 
@@ -147,29 +155,35 @@ export default function HomePage() {
           </div>
 
           {/* Load Sample Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-md hover:border-slate-700 transition flex flex-col justify-between">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-md hover:border-slate-700 transition flex flex-col justify-between space-y-4">
             <div>
               <div className="w-10 h-10 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center font-bold text-lg mb-4 border border-purple-500/30">
                 ★
               </div>
               <h2 className="text-lg font-bold text-white mb-1">Load Sample Project</h2>
-              <p className="text-xs text-slate-400 mb-4">
-                Instantly load <strong>Summer Reel 2026</strong> pre-populated with 4 media assets, base snapshot,
-                collaborator variation on V2 overlay, and an open review request.
+              <p className="text-xs text-slate-400">
+                Builds a timeline of <strong>6 placeholder clips with no media</strong> (colored boxes only: 4 video scenes on V1 + 2 audio tracks on A1).
               </p>
             </div>
 
             <div className="space-y-2">
               <div className="text-[11px] text-slate-500 space-y-1 font-mono bg-slate-950 p-2.5 rounded border border-slate-800">
-                <div>&bull; Tracks: V2 (Overlay), V1 (Primary), A1 (Audio), CC</div>
-                <div>&bull; Includes pending variation &amp; review request</div>
+                <div>&bull; 6 placeholder clips with no media (colored boxes)</div>
+                <div>&bull; 4 Video clips on V1 + 2 Audio clips on A1</div>
               </div>
               <button
                 type="button"
-                onClick={handleLoadSample}
+                onClick={handleLoadSampleProject}
                 className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm font-semibold rounded-lg transition shadow-md"
               >
-                Load Sample Project &rarr;
+                Load Sample Project (6 Placeholder Clips) &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadSummerReel}
+                className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition border border-slate-700"
+              >
+                Or Load Summer Reel 2026 (with variations &amp; review)
               </button>
             </div>
           </div>
@@ -194,7 +208,7 @@ export default function HomePage() {
 
           {!mounted || projects.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-xs">
-              No projects found in localStorage yet. Create a new one or load the sample above!
+              No projects found in localStorage yet. Create a new one or click &quot;Load Sample Project&quot; above!
             </div>
           ) : (
             <div className="divide-y divide-slate-800">
@@ -253,4 +267,3 @@ export default function HomePage() {
     </div>
   );
 }
-

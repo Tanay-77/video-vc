@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { TimelineView } from '@/components/TimelineView';
-import { MediaLibrary } from '@/components/MediaLibrary';
+import { PlayerView } from '@/components/PlayerView';
+import { Dropzone } from '@/components/Dropzone';
 import { DiffViewer } from '@/components/DiffViewer';
 import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, Snapshot, Timeline } from '@/lib/types';
+import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 
 export default function LeadEditorPage() {
   const params = useParams();
@@ -20,6 +22,9 @@ export default function LeadEditorPage() {
   const [snapshotMsg, setSnapshotMsg] = useState('');
   const [snapshotAuthor, setSnapshotAuthor] = useState('Lead Editor (Alex)');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
+
+  // Playhead scrubber time shared between player and timeline
+  const [playerTime, setPlayerTime] = useState<number>(0);
 
   // Selected review for diff view
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
@@ -64,10 +69,9 @@ export default function LeadEditorPage() {
   // Active base timeline for lead is the latest snapshot timeline, or empty if none
   const activeTimeline = latestSnapshot?.timeline || { clips: [] };
 
-  // Handler to update the active timeline (persists as a new working state or snapshot)
+  // Handler to update the active timeline
   const handleUpdateActiveTimeline = (updatedTimeline: Timeline) => {
     if (!latestSnapshot) {
-      // Create initial snapshot if none existed
       const initialSnap: Snapshot = {
         id: `snap_${Date.now()}`,
         parentId: null,
@@ -83,7 +87,6 @@ export default function LeadEditorPage() {
       return;
     }
 
-    // Update the latest snapshot timeline in place for immediate working editing
     const updatedSnapshots = [...project.snapshots];
     updatedSnapshots[updatedSnapshots.length - 1] = {
       ...latestSnapshot,
@@ -94,6 +97,20 @@ export default function LeadEditorPage() {
       ...project,
       snapshots: updatedSnapshots,
     });
+  };
+
+  // 'Load sample project' button: builds a timeline of 6 placeholder clips with no media (colored boxes only)
+  const handleLoadPlaceholderSample = () => {
+    const placeholderTimeline = buildPlaceholderSampleTimeline();
+    handleUpdateActiveTimeline(placeholderTimeline);
+    setPlayerTime(0);
+  };
+
+  // Auto-build timeline from uploaded media items (videos on V1, audio on A1)
+  const handleAutoBuildTimeline = (items: MediaItem[]) => {
+    const generatedTimeline = buildTimeline(items);
+    handleUpdateActiveTimeline(generatedTimeline);
+    setPlayerTime(0);
   };
 
   // Handler to create a formal new Snapshot (git commit)
@@ -122,22 +139,11 @@ export default function LeadEditorPage() {
     setIsCreatingSnapshot(false);
   };
 
-  // Handler to add media to project
-  const handleMediaAdded = (newMedia: MediaItem) => {
+  // Handler to add media items to project
+  const handleMediaAdded = (newItems: MediaItem[]) => {
     setProject({
       ...project,
-      media: [...project.media, newMedia],
-    });
-  };
-
-  // Handler to insert clip to timeline from media library
-  const handleInsertClip = (newClip: Clip) => {
-    const currentClips = latestSnapshot ? [...latestSnapshot.timeline.clips] : [];
-    // Place clip at the end or at 0
-    const end = currentClips.reduce((acc, c) => Math.max(acc, c.start + c.dur), 0);
-    newClip.start = end;
-    handleUpdateActiveTimeline({
-      clips: [...currentClips, newClip],
+      media: [...project.media, ...newItems],
     });
   };
 
@@ -149,7 +155,6 @@ export default function LeadEditorPage() {
     const variation = project.variations.find((v) => v.id === review.variationId);
     if (!variation) return;
 
-    // Create a new merge Snapshot
     const mergeSnapshot: Snapshot = {
       id: `snap_merge_${Date.now()}`,
       parentId: latestSnapshot ? latestSnapshot.id : null,
@@ -159,12 +164,10 @@ export default function LeadEditorPage() {
       timeline: JSON.parse(JSON.stringify(variation.timeline)),
     };
 
-    // Update review status
     const updatedReviews = project.reviews.map((r) =>
       r.id === reviewId ? { ...r, status: 'combined' as const } : r
     );
 
-    // Update variation status
     const updatedVariations = project.variations.map((v) =>
       v.id === variation.id ? { ...v, status: 'combined' as const } : v
     );
@@ -191,7 +194,6 @@ export default function LeadEditorPage() {
       r.id === reviewId ? { ...r, status: 'changes-requested' as const, note } : r
     );
 
-    // Keep variation in editing status for collaborator
     const updatedVariations = project.variations.map((v) =>
       v.id === review.variationId ? { ...v, status: 'editing' as const } : v
     );
@@ -205,15 +207,6 @@ export default function LeadEditorPage() {
     setRequestChangeNote('');
     setActiveReviewAction(null);
   };
-
-  // Find selected review for diff inspect
-  const activeReview = project.reviews.find((r) => r.id === selectedReviewId);
-  const activeReviewVariation = activeReview
-    ? project.variations.find((v) => v.id === activeReview.variationId)
-    : null;
-  const activeReviewBaseSnapshot = activeReview
-    ? project.snapshots.find((s) => s.id === activeReview.baseSnapshotId) || latestSnapshot
-    : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
@@ -235,7 +228,17 @@ export default function LeadEditorPage() {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center flex-wrap gap-2">
+            {/* 'Load sample project' button: builds 6 placeholder clips with no media */}
+            <button
+              type="button"
+              onClick={handleLoadPlaceholderSample}
+              className="px-3 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-xs font-semibold rounded-lg transition border border-purple-700/60 shadow-sm flex items-center gap-1.5"
+              title="Build a timeline of 6 placeholder clips with no media (colored boxes only)"
+            >
+              <span>★ Load 6-Clip Sample</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
@@ -243,6 +246,7 @@ export default function LeadEditorPage() {
             >
               <span>+ Create Snapshot (Commit)</span>
             </button>
+
             <Link
               href={`/join/${project.id}`}
               target="_blank"
@@ -302,6 +306,27 @@ export default function LeadEditorPage() {
           </form>
         )}
 
+        {/* Live Preview Player View */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span>Preview Player</span>
+              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+                V1 Video + A1 Audio + Gaps
+              </span>
+            </h2>
+            <span className="text-xs text-slate-500">
+              Plays V1 clips, A1 audio elements, and shows black frame in gaps
+            </span>
+          </div>
+
+          <PlayerView
+            timeline={activeTimeline}
+            time={playerTime}
+            onTime={setPlayerTime}
+          />
+        </section>
+
         {/* Master Timeline View */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
@@ -319,6 +344,15 @@ export default function LeadEditorPage() {
             editable={true}
             onUpdateTimeline={handleUpdateActiveTimeline}
             title="Active Assembly Cut"
+          />
+        </section>
+
+        {/* Dropzone & Media Bin */}
+        <section>
+          <Dropzone
+            mediaItems={project.media}
+            onMediaAdded={handleMediaAdded}
+            onBuildTimeline={handleAutoBuildTimeline}
           />
         </section>
 
@@ -524,15 +558,7 @@ export default function LeadEditorPage() {
             ))}
           </div>
         </section>
-
-        {/* Media Library */}
-        <MediaLibrary
-          media={project.media}
-          onMediaAdded={handleMediaAdded}
-          onInsertToTimeline={handleInsertClip}
-        />
       </main>
     </div>
   );
 }
-

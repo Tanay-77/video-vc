@@ -33,66 +33,80 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export function extractVideoDuration(file: File | Blob): Promise<number> {
+/**
+ * Reads the duration from a hidden video or audio element via loadedmetadata
+ */
+export function readMediaDuration(file: File | Blob, fileName?: string): Promise<number> {
   return new Promise((resolve) => {
     if (
       typeof document === 'undefined' ||
       typeof URL === 'undefined' ||
       typeof URL.createObjectURL !== 'function'
     ) {
-      return resolve(0);
+      return resolve(10);
     }
 
     try {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
+      const name = (fileName || (file instanceof File ? file.name : '')).toLowerCase();
+      const isAudio =
+        name.endsWith('.mp3') ||
+        name.endsWith('.wav') ||
+        ('type' in file && typeof file.type === 'string' && file.type.startsWith('audio/'));
+
+      const mediaEl = document.createElement(isAudio ? 'audio' : 'video');
+      mediaEl.preload = 'metadata';
 
       let settled = false;
       const cleanup = () => {
         if (settled) return;
         settled = true;
         try {
-          if (video.src && video.src.startsWith('blob:')) {
-            URL.revokeObjectURL(video.src);
+          if (mediaEl.src && mediaEl.src.startsWith('blob:')) {
+            URL.revokeObjectURL(mediaEl.src);
           }
-          video.src = '';
+          mediaEl.src = '';
         } catch {}
       };
 
-      // In test/headless environments (e.g. jsdom), media events do not fire
+      // Timeout fallback for headless or non-standard environments
       const timer = setTimeout(() => {
         cleanup();
-        resolve(0);
-      }, 300);
+        resolve(10);
+      }, 600);
 
-      video.onloadedmetadata = () => {
+      mediaEl.onloadedmetadata = () => {
         clearTimeout(timer);
-        const dur = video.duration;
+        const dur = mediaEl.duration;
         cleanup();
-        resolve(Number.isFinite(dur) && dur > 0 ? dur : 0);
+        resolve(Number.isFinite(dur) && dur > 0 ? dur : 10);
       };
 
-      video.onerror = () => {
+      mediaEl.onerror = () => {
         clearTimeout(timer);
         cleanup();
-        resolve(0);
+        resolve(10);
       };
 
-      video.src = URL.createObjectURL(file);
+      mediaEl.src = URL.createObjectURL(file);
     } catch {
-      resolve(0);
+      resolve(10);
     }
   });
 }
 
-export async function saveMedia(file: File): Promise<MediaItem> {
+// Backward-compatible alias
+export const extractVideoDuration = readMediaDuration;
+
+export async function saveMedia(file: File, explicitDuration?: number): Promise<MediaItem> {
   const db = await openDB();
   const id = typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `media_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-  let duration = await extractVideoDuration(file);
-  // Default to 10s if duration cannot be parsed (e.g. mock/audio/unsupported container/headless)
+  let duration = explicitDuration && explicitDuration > 0
+    ? explicitDuration
+    : await readMediaDuration(file, file.name);
+
   if (duration <= 0) {
     duration = 10;
   }
@@ -102,7 +116,7 @@ export async function saveMedia(file: File): Promise<MediaItem> {
     name: file.name,
     size: file.size,
     duration,
-    type: file.type || 'video/mp4',
+    type: file.type || (file.name.endsWith('.mp3') ? 'audio/mpeg' : file.name.endsWith('.wav') ? 'audio/wav' : 'video/mp4'),
     blob: file,
   };
 

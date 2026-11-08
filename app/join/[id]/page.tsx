@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { TimelineView } from '@/components/TimelineView';
-import { MediaLibrary } from '@/components/MediaLibrary';
+import { PlayerView } from '@/components/PlayerView';
+import { Dropzone } from '@/components/Dropzone';
 import { DiffViewer } from '@/components/DiffViewer';
 import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, ReviewRequest, Timeline, Variation } from '@/lib/types';
+import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 
 export default function CollaboratorPage() {
   const params = useParams();
@@ -18,6 +20,9 @@ export default function CollaboratorPage() {
 
   // Active variation selection
   const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
+
+  // Playhead scrubber time
+  const [playerTime, setPlayerTime] = useState<number>(0);
 
   // New variation form state
   const [isCreatingVariation, setIsCreatingVariation] = useState(false);
@@ -122,7 +127,6 @@ export default function CollaboratorPage() {
         return {
           ...v,
           timeline: updatedTimeline,
-          // If changes were requested, revert status to editing as collaborator iterates
           status: v.status === 'combined' ? v.status : ('editing' as const),
         };
       }
@@ -133,6 +137,20 @@ export default function CollaboratorPage() {
       ...project,
       variations: updatedVariations,
     });
+  };
+
+  // 'Load sample project' button: loads 6 placeholder clips into this variation
+  const handleLoadPlaceholderSample = () => {
+    const placeholderTimeline = buildPlaceholderSampleTimeline();
+    handleUpdateVariationTimeline(placeholderTimeline);
+    setPlayerTime(0);
+  };
+
+  // Auto-build timeline from uploaded media items
+  const handleAutoBuildTimeline = (items: MediaItem[]) => {
+    const generatedTimeline = buildTimeline(items);
+    handleUpdateVariationTimeline(generatedTimeline);
+    setPlayerTime(0);
   };
 
   // Handler to submit Review Request to Lead
@@ -165,21 +183,10 @@ export default function CollaboratorPage() {
   };
 
   // Handler for media added
-  const handleMediaAdded = (newMedia: MediaItem) => {
+  const handleMediaAdded = (newItems: MediaItem[]) => {
     setProject({
       ...project,
-      media: [...project.media, newMedia],
-    });
-  };
-
-  // Handler to insert clip into current variation timeline
-  const handleInsertClip = (newClip: Clip) => {
-    if (!activeVariation) return;
-    const currentClips = [...activeVariation.timeline.clips];
-    const end = currentClips.reduce((acc, c) => Math.max(acc, c.start + c.dur), 0);
-    newClip.start = end;
-    handleUpdateVariationTimeline({
-      clips: [...currentClips, newClip],
+      media: [...project.media, ...newItems],
     });
   };
 
@@ -202,7 +209,16 @@ export default function CollaboratorPage() {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleLoadPlaceholderSample}
+              className="px-3 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-xs font-semibold rounded-lg transition border border-purple-700/60 shadow-sm flex items-center gap-1.5"
+              title="Load 6 placeholder clips with no media (colored boxes only)"
+            >
+              <span>★ Load 6-Clip Sample</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsCreatingVariation(!isCreatingVariation)}
@@ -210,6 +226,7 @@ export default function CollaboratorPage() {
             >
               <span>+ Branch New Variation</span>
             </button>
+
             <Link
               href={`/lead/${project.id}`}
               target="_blank"
@@ -407,28 +424,36 @@ export default function CollaboratorPage() {
           </form>
         )}
 
-        {/* Variation Timeline Editor */}
+        {/* Variation Preview Player & Timeline */}
         {activeVariation ? (
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-200">
-                  Editing Variation: <span className="text-emerald-400">{activeVariation.name}</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                  <span>Variation Preview Player:</span>
+                  <span className="text-emerald-400">{activeVariation.name}</span>
                 </h2>
                 <span className="text-xs text-slate-500">
-                  Author: {activeVariation.author} &bull; Base snapshot:{' '}
-                  <span className="font-mono text-slate-400">{activeVariation.baseSnapshotId.slice(0, 10)}</span>
+                  Status: <strong className="uppercase">{activeVariation.status}</strong>
                 </span>
               </div>
+
+              <PlayerView
+                timeline={activeVariation.timeline}
+                time={playerTime}
+                onTime={setPlayerTime}
+              />
             </div>
 
-            <TimelineView
-              timeline={activeVariation.timeline}
-              mediaList={project.media}
-              editable={activeVariation.status !== 'combined'}
-              onUpdateTimeline={handleUpdateVariationTimeline}
-              title={`Variation Timeline (${activeVariation.status})`}
-            />
+            <div className="space-y-2">
+              <TimelineView
+                timeline={activeVariation.timeline}
+                mediaList={project.media}
+                editable={activeVariation.status !== 'combined'}
+                onUpdateTimeline={handleUpdateVariationTimeline}
+                title={`Variation Timeline (${activeVariation.status})`}
+              />
+            </div>
 
             {/* Diff against base snapshot */}
             {baseSnapshot && (
@@ -459,14 +484,15 @@ export default function CollaboratorPage() {
           </div>
         )}
 
-        {/* Media Library */}
-        <MediaLibrary
-          media={project.media}
-          onMediaAdded={handleMediaAdded}
-          onInsertToTimeline={handleInsertClip}
-        />
+        {/* Dropzone & Media Bin */}
+        <section>
+          <Dropzone
+            mediaItems={project.media}
+            onMediaAdded={handleMediaAdded}
+            onBuildTimeline={handleAutoBuildTimeline}
+          />
+        </section>
       </main>
     </div>
   );
 }
-
