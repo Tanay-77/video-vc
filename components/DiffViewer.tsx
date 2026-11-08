@@ -153,3 +153,4 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
     </div>
   );
 }
+

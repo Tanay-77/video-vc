@@ -60,3 +60,4 @@ export interface Project {
   variations: Variation[];
   reviews: ReviewRequest[];
 }
+

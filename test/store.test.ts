@@ -102,3 +102,4 @@ describe('lib/store.ts', () => {
     expect(loadProject('proj-b')).not.toBeNull();
   });
 });
+

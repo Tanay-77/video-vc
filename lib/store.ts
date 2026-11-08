@@ -110,3 +110,4 @@ export function deleteProject(id: string): void {
     console.error('Error deleting project:', err);
   }
 }
+

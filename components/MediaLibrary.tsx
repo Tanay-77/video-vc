@@ -201,3 +201,4 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
     </div>
   );
 }
+

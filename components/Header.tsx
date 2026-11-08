@@ -82,3 +82,4 @@ export function Header({ projectId, projectName, role }: HeaderProps) {
     </header>
   );
 }
+

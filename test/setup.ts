@@ -36,3 +36,4 @@ if (typeof globalThis.BroadcastChannel === 'undefined') {
 
   (globalThis as any).BroadcastChannel = MockBroadcastChannel;
 }
+

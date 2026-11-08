@@ -97,3 +97,4 @@ describe('lib/types.ts & project structure', () => {
     expect(modified?.changes?.some((ch) => ch.includes('Track: V1 → V2'))).toBe(true);
   });
 });
+

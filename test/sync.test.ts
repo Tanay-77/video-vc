@@ -52,3 +52,4 @@ describe('lib/sync.ts', () => {
     testChannel.close();
   });
 });
+
