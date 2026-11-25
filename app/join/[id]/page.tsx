@@ -479,6 +479,8 @@ export default function CollaboratorPage() {
                 mediaList={project.media}
                 editable={activeVariation.status !== 'combined'}
                 onUpdateTimeline={handleUpdateVariationTimeline}
+                time={playerTime}
+                onTime={setPlayerTime}
                 title={`Variation Timeline (${activeVariation.status})`}
               />
             </div>

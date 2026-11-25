@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Clip, MediaItem, Timeline, TrackType } from '../lib/types';
 
 interface TimelineViewProps {
@@ -9,6 +9,8 @@ interface TimelineViewProps {
   editable?: boolean;
   onUpdateTimeline?: (timeline: Timeline) => void;
   title?: string;
+  time?: number;
+  onTime?: (t: number) => void;
 }
 
 const TRACKS: { id: TrackType; label: string; desc: string; bg: string; border: string; clipBg: string }[] = [
@@ -18,18 +20,49 @@ const TRACKS: { id: TrackType; label: string; desc: string; bg: string; border: 
   { id: 'CC', label: 'CC', desc: 'Color / Captions', bg: 'bg-amber-950/20', border: 'border-amber-800/40', clipBg: 'bg-amber-600 hover:bg-amber-500 border-amber-400' },
 ];
 
+const TRACK_HEIGHT = 56; // 14 Tailwind units = 56px
+
+interface DragState {
+  mode: 'move' | 'trim-left' | 'trim-right';
+  clipId: string;
+  startMouseX: number;
+  startMouseY: number;
+  initialStart: number;
+  initialDur: number;
+  initialSourceIn: number;
+  initialSourceOut: number;
+  initialSpeed: number;
+  initialTrack: TrackType;
+  currentStart: number;
+  currentDur: number;
+  currentSourceIn: number;
+  currentSourceOut: number;
+  currentTrack: TrackType;
+}
+
 export function TimelineView({
   timeline,
   mediaList = [],
   editable = false,
   onUpdateTimeline,
   title,
+  time: propTime,
+  onTime,
 }: TimelineViewProps) {
   const [pxPerSec, setPxPerSec] = useState<number>(45);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [isAddingClip, setIsAddingClip] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [internalTime, setInternalTime] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [snappingEnabled, setSnappingEnabled] = useState<boolean>(true);
+
+  // Undo / Redo history stacks
+  const [undoStack, setUndoStack] = useState<Timeline[]>([]);
+  const [redoStack, setRedoStack] = useState<Timeline[]>([]);
+
+  // Dragging state for move & trim
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
 
   // New clip form state
   const [newTrack, setNewTrack] = useState<TrackType>('V1');
@@ -40,6 +73,10 @@ export function TimelineView({
   const [newSpeed, setNewSpeed] = useState<number>(1.0);
 
   const rulerRef = useRef<HTMLDivElement>(null);
+  const tracksContainerRef = useRef<HTMLDivElement>(null);
+
+  // Current playhead time
+  const currentTime = propTime !== undefined ? propTime : internalTime;
 
   // Calculate total timeline length in seconds
   const maxTime = Math.max(
@@ -47,42 +84,60 @@ export function TimelineView({
     ...timeline.clips.map((c) => c.start + c.dur + 2)
   );
 
+  const updateTime = useCallback((t: number) => {
+    const clamped = Math.max(0, Math.min(maxTime, t));
+    const rounded = parseFloat(clamped.toFixed(2));
+    if (onTime) {
+      onTime(rounded);
+    } else {
+      setInternalTime(rounded);
+    }
+  }, [maxTime, onTime]);
+
+  // Helper to commit a timeline change with undo history
+  const commitTimelineChange = useCallback((newTimeline: Timeline) => {
+    if (!onUpdateTimeline) return;
+    setUndoStack((prev) => [...prev.slice(-30), JSON.parse(JSON.stringify(timeline))]);
+    setRedoStack([]);
+    onUpdateTimeline(newTimeline);
+  }, [onUpdateTimeline, timeline]);
+
+  const handleUndo = useCallback(() => {
+    if (!editable || !onUpdateTimeline || undoStack.length === 0) return;
+    const prevTimeline = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, JSON.parse(JSON.stringify(timeline))]);
+    onUpdateTimeline(prevTimeline);
+  }, [editable, onUpdateTimeline, undoStack, timeline]);
+
+  const handleRedo = useCallback(() => {
+    if (!editable || !onUpdateTimeline || redoStack.length === 0) return;
+    const nextTimeline = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, JSON.parse(JSON.stringify(timeline))]);
+    onUpdateTimeline(nextTimeline);
+  }, [editable, onUpdateTimeline, redoStack, timeline]);
+
   // Playhead playback loop
   useEffect(() => {
     if (!isPlaying) return;
 
     const interval = setInterval(() => {
-      setCurrentTime((prev) => {
-        if (prev >= maxTime) {
-          setIsPlaying(false);
-          return 0;
-        }
-        return Math.min(maxTime, prev + 0.1);
-      });
+      const nextTime = currentTime + 0.1;
+      if (nextTime >= maxTime) {
+        setIsPlaying(false);
+        updateTime(0);
+      } else {
+        updateTime(nextTime);
+      }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlaying, maxTime]);
-
-  // Spacebar toggle playback (when not typing in an input)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
-        return;
-      }
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setIsPlaying((prev) => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isPlaying, currentTime, maxTime, updateTime]);
 
   const selectedClip = timeline.clips.find((c) => c.id === selectedClipId);
 
-  // Find active clips under current playhead (highest priority: V2 > V1, A1, CC)
+  // Active clips under current playhead
   const activeClips = timeline.clips.filter(
     (c) => currentTime >= c.start && currentTime <= c.start + c.dur
   );
@@ -92,6 +147,339 @@ export function TimelineView({
   const activeAudioClip = activeClips.find((c) => c.track === 'A1');
   const activeEffectClip = activeClips.find((c) => c.track === 'CC');
 
+  // Split clip at playhead
+  const handleSplitAtPlayhead = useCallback(() => {
+    if (!editable || !onUpdateTimeline) return;
+
+    const targetClip = selectedClip && currentTime > selectedClip.start && currentTime < selectedClip.start + selectedClip.dur
+      ? selectedClip
+      : activeVideoClip || activeClips[0];
+
+    if (!targetClip) return;
+    if (currentTime <= targetClip.start || currentTime >= targetClip.start + targetClip.dur) return;
+
+    const splitOffset = currentTime - targetClip.start;
+    const firstDur = parseFloat(splitOffset.toFixed(2));
+    const secondDur = parseFloat((targetClip.dur - splitOffset).toFixed(2));
+    const firstSourceOut = targetClip.sourceIn + splitOffset * targetClip.speed;
+
+    const firstClip: Clip = {
+      ...targetClip,
+      dur: firstDur,
+      sourceOut: firstSourceOut,
+    };
+
+    const secondClip: Clip = {
+      ...targetClip,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
+      start: parseFloat(currentTime.toFixed(2)),
+      dur: secondDur,
+      sourceIn: firstSourceOut,
+    };
+
+    const updated = timeline.clips.map((c) => (c.id === targetClip.id ? firstClip : c));
+    updated.push(secondClip);
+
+    commitTimelineChange({ clips: updated });
+    setSelectedClipId(secondClip.id);
+  }, [editable, onUpdateTimeline, selectedClip, currentTime, activeVideoClip, activeClips, timeline.clips, commitTimelineChange]);
+
+  // Delete selected clip
+  const handleDeleteSelectedClip = useCallback(() => {
+    if (!editable || !onUpdateTimeline || !selectedClipId) return;
+    const updatedClips = timeline.clips.filter((c) => c.id !== selectedClipId);
+    commitTimelineChange({ clips: updatedClips });
+    setSelectedClipId(null);
+  }, [editable, onUpdateTimeline, selectedClipId, timeline.clips, commitTimelineChange]);
+
+  // Duplicate selected clip
+  const handleDuplicateSelectedClip = useCallback(() => {
+    if (!editable || !onUpdateTimeline || !selectedClip) return;
+    const duplicateClip: Clip = {
+      ...selectedClip,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}_dup`,
+      name: `${selectedClip.name} (Copy)`,
+      start: parseFloat((selectedClip.start + selectedClip.dur + 0.1).toFixed(2)),
+    };
+    commitTimelineChange({ clips: [...timeline.clips, duplicateClip] });
+    setSelectedClipId(duplicateClip.id);
+  }, [editable, onUpdateTimeline, selectedClip, timeline.clips, commitTimelineChange]);
+
+  // Close gaps between clips on V1
+  const handleCloseGaps = useCallback(() => {
+    if (!editable || !onUpdateTimeline) return;
+    const v1Clips = [...timeline.clips.filter((c) => c.track === 'V1')].sort((a, b) => a.start - b.start);
+    let curStart = 0;
+    const updatedV1 = v1Clips.map((c) => {
+      const res = { ...c, start: curStart };
+      curStart += c.dur;
+      return res;
+    });
+    const nonV1 = timeline.clips.filter((c) => c.track !== 'V1');
+    commitTimelineChange({ clips: [...updatedV1, ...nonV1] });
+  }, [editable, onUpdateTimeline, timeline.clips, commitTimelineChange]);
+
+  // Keyboard Shortcuts (Space, Ctrl+Z, Ctrl+Y, S, Delete, Arrow keys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      // Undo: Ctrl+Z / Cmd+Z
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z / Cmd+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+      ) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Duplicate: Ctrl+D
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleDuplicateSelectedClip();
+        return;
+      }
+
+      // Space: Play/Pause
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
+        return;
+      }
+
+      // Split: 'S'
+      if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSplitAtPlayhead();
+        return;
+      }
+
+      // Delete: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        handleDeleteSelectedClip();
+        return;
+      }
+
+      // Arrow Left / Right: Seek backward/forward
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const step = e.shiftKey ? 1.0 : 0.1;
+        updateTime(currentTime - step);
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const step = e.shiftKey ? 1.0 : 0.1;
+        updateTime(currentTime + step);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo, handleSplitAtPlayhead, handleDeleteSelectedClip, handleDuplicateSelectedClip, updateTime, currentTime]);
+
+  // Compute snap points (0, playhead, all other clips' start & end)
+  const getSnapPoints = useCallback((excludeClipId?: string): number[] => {
+    const points = new Set<number>([0, parseFloat(currentTime.toFixed(2))]);
+    timeline.clips.forEach((c) => {
+      if (c.id !== excludeClipId) {
+        points.add(parseFloat(c.start.toFixed(2)));
+        points.add(parseFloat((c.start + c.dur).toFixed(2)));
+      }
+    });
+    return Array.from(points);
+  }, [currentTime, timeline.clips]);
+
+  // Start clip drag (move or trim)
+  const handleStartClipDrag = (
+    e: React.MouseEvent,
+    clip: Clip,
+    mode: 'move' | 'trim-left' | 'trim-right'
+  ) => {
+    if (!editable) return;
+    e.stopPropagation();
+    setSelectedClipId(clip.id);
+
+    setDragState({
+      mode,
+      clipId: clip.id,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      initialStart: clip.start,
+      initialDur: clip.dur,
+      initialSourceIn: clip.sourceIn,
+      initialSourceOut: clip.sourceOut,
+      initialSpeed: clip.speed,
+      initialTrack: clip.track,
+      currentStart: clip.start,
+      currentDur: clip.dur,
+      currentSourceIn: clip.sourceIn,
+      currentSourceOut: clip.sourceOut,
+      currentTrack: clip.track,
+    });
+  };
+
+  // Global mouse move & mouse up listeners for dragging & scrubbing
+  useEffect(() => {
+    if (!dragState && !isScrubbing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Handle playhead scrubbing
+      if (isScrubbing && rulerRef.current) {
+        const rect = rulerRef.current.getBoundingClientRect();
+        const clickX = e.clientX - rect.left - 96;
+        const sought = Math.max(0, Math.min(maxTime, clickX / pxPerSec));
+        updateTime(sought);
+        return;
+      }
+
+      // Handle clip dragging (move or trim)
+      if (dragState) {
+        const deltaX = (e.clientX - dragState.startMouseX) / pxPerSec;
+        const snapThreshold = 10 / pxPerSec; // 10px snap window
+        const snapPoints = snappingEnabled ? getSnapPoints(dragState.clipId) : [];
+
+        if (dragState.mode === 'move') {
+          let candidateStart = Math.max(0, dragState.initialStart + deltaX);
+          const candidateEnd = candidateStart + dragState.initialDur;
+
+          // Apply snapping to start or end
+          if (snappingEnabled) {
+            for (const sp of snapPoints) {
+              if (Math.abs(candidateStart - sp) < snapThreshold) {
+                candidateStart = sp;
+                break;
+              } else if (Math.abs(candidateEnd - sp) < snapThreshold) {
+                candidateStart = Math.max(0, sp - dragState.initialDur);
+                break;
+              }
+            }
+          }
+
+          // Track lane vertical detection
+          let candidateTrack = dragState.initialTrack;
+          if (tracksContainerRef.current) {
+            const containerRect = tracksContainerRef.current.getBoundingClientRect();
+            const relY = e.clientY - containerRect.top;
+            const trackIndex = Math.floor(relY / TRACK_HEIGHT);
+            if (trackIndex >= 0 && trackIndex < TRACKS.length) {
+              candidateTrack = TRACKS[trackIndex].id;
+            }
+          }
+
+          setDragState((prev) => prev ? {
+            ...prev,
+            currentStart: parseFloat(candidateStart.toFixed(2)),
+            currentTrack: candidateTrack,
+          } : null);
+        } else if (dragState.mode === 'trim-left') {
+          // Left handle: adjusts start, dur, sourceIn
+          let candidateStart = dragState.initialStart + deltaX;
+          candidateStart = Math.max(0, Math.min(candidateStart, dragState.initialStart + dragState.initialDur - 0.2));
+
+          if (snappingEnabled) {
+            for (const sp of snapPoints) {
+              if (Math.abs(candidateStart - sp) < snapThreshold) {
+                candidateStart = sp;
+                break;
+              }
+            }
+          }
+
+          const actualDelta = candidateStart - dragState.initialStart;
+          const newDur = Math.max(0.2, dragState.initialDur - actualDelta);
+          const newSourceIn = Math.max(0, dragState.initialSourceIn + actualDelta * dragState.initialSpeed);
+
+          setDragState((prev) => prev ? {
+            ...prev,
+            currentStart: parseFloat(candidateStart.toFixed(2)),
+            currentDur: parseFloat(newDur.toFixed(2)),
+            currentSourceIn: parseFloat(newSourceIn.toFixed(2)),
+          } : null);
+        } else if (dragState.mode === 'trim-right') {
+          // Right handle: adjusts dur, sourceOut
+          let candidateEnd = dragState.initialStart + dragState.initialDur + deltaX;
+          candidateEnd = Math.max(dragState.initialStart + 0.2, candidateEnd);
+
+          if (snappingEnabled) {
+            for (const sp of snapPoints) {
+              if (Math.abs(candidateEnd - sp) < snapThreshold) {
+                candidateEnd = sp;
+                break;
+              }
+            }
+          }
+
+          const newDur = Math.max(0.2, candidateEnd - dragState.initialStart);
+          const newSourceOut = dragState.initialSourceIn + newDur * dragState.initialSpeed;
+
+          setDragState((prev) => prev ? {
+            ...prev,
+            currentDur: parseFloat(newDur.toFixed(2)),
+            currentSourceOut: parseFloat(newSourceOut.toFixed(2)),
+          } : null);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isScrubbing) {
+        setIsScrubbing(false);
+      }
+
+      if (dragState) {
+        const hasChanged =
+          dragState.currentStart !== dragState.initialStart ||
+          dragState.currentDur !== dragState.initialDur ||
+          dragState.currentTrack !== dragState.initialTrack ||
+          dragState.currentSourceIn !== dragState.initialSourceIn ||
+          dragState.currentSourceOut !== dragState.initialSourceOut;
+
+        if (hasChanged && editable && onUpdateTimeline) {
+          const updatedClips = timeline.clips.map((c) => {
+            if (c.id === dragState.clipId) {
+              return {
+                ...c,
+                start: dragState.currentStart,
+                dur: dragState.currentDur,
+                track: dragState.currentTrack,
+                sourceIn: dragState.currentSourceIn,
+                sourceOut: dragState.currentSourceOut,
+              };
+            }
+            return c;
+          });
+          commitTimelineChange({ clips: updatedClips });
+        }
+
+        setDragState(null);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState, isScrubbing, pxPerSec, maxTime, snappingEnabled, getSnapPoints, editable, onUpdateTimeline, timeline.clips, commitTimelineChange, updateTime]);
+
   const handleUpdateSelectedClip = (field: keyof Clip, value: any) => {
     if (!editable || !onUpdateTimeline || !selectedClipId) return;
     const updatedClips = timeline.clips.map((c) => {
@@ -100,14 +488,7 @@ export function TimelineView({
       }
       return c;
     });
-    onUpdateTimeline({ clips: updatedClips });
-  };
-
-  const handleDeleteSelectedClip = () => {
-    if (!editable || !onUpdateTimeline || !selectedClipId) return;
-    const updatedClips = timeline.clips.filter((c) => c.id !== selectedClipId);
-    onUpdateTimeline({ clips: updatedClips });
-    setSelectedClipId(null);
+    commitTimelineChange({ clips: updatedClips });
   };
 
   const handleAddClip = (e: React.FormEvent) => {
@@ -126,58 +507,20 @@ export function TimelineView({
       speed: Number(newSpeed) || 1.0,
     };
 
-    onUpdateTimeline({ clips: [...timeline.clips, newClip] });
+    commitTimelineChange({ clips: [...timeline.clips, newClip] });
     setIsAddingClip(false);
     setSelectedClipId(newClip.id);
   };
 
-  // Split clip at playhead
-  const handleSplitAtPlayhead = () => {
-    if (!editable || !onUpdateTimeline) return;
-
-    // Split selected clip if playhead is within it, or split whatever clip is under playhead
-    const targetClip = selectedClip && currentTime > selectedClip.start && currentTime < selectedClip.start + selectedClip.dur
-      ? selectedClip
-      : activeVideoClip || activeClips[0];
-
-    if (!targetClip) return;
-    if (currentTime <= targetClip.start || currentTime >= targetClip.start + targetClip.dur) return;
-
-    const splitOffset = currentTime - targetClip.start;
-    const firstDur = splitOffset;
-    const secondDur = targetClip.dur - splitOffset;
-
-    const firstSourceOut = targetClip.sourceIn + splitOffset * targetClip.speed;
-
-    const firstClip: Clip = {
-      ...targetClip,
-      dur: firstDur,
-      sourceOut: firstSourceOut,
-    };
-
-    const secondClip: Clip = {
-      ...targetClip,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
-      start: currentTime,
-      dur: secondDur,
-      sourceIn: firstSourceOut,
-    };
-
-    const updated = timeline.clips.map((c) => (c.id === targetClip.id ? firstClip : c));
-    updated.push(secondClip);
-
-    onUpdateTimeline({ clips: updated });
-    setSelectedClipId(secondClip.id);
-  };
-
-  // Ruler click to seek
-  const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  // Ruler mousedown to seek and scrub
+  const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = rulerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const clickX = e.clientX - rect.left - 96; // 96px is track label width
+    const clickX = e.clientX - rect.left - 96;
     if (clickX >= 0) {
       const soughtTime = Math.max(0, Math.min(maxTime, clickX / pxPerSec));
-      setCurrentTime(parseFloat(soughtTime.toFixed(2)));
+      updateTime(soughtTime);
+      setIsScrubbing(true);
     }
   };
 
@@ -196,24 +539,25 @@ export function TimelineView({
   const ticks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickInterval);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl select-none">
       {/* Timeline Header Controls */}
       <div className="px-4 py-3 bg-slate-850 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-3">
           {title && <h3 className="font-semibold text-slate-200 text-sm">{title}</h3>}
-          <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+          <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-mono">
             {timeline.clips.length} clip{timeline.clips.length !== 1 ? 's' : ''} &bull; {maxTime.toFixed(1)}s total
           </span>
         </div>
 
-        {/* Playback Controls & HUD */}
-        <div className="flex items-center space-x-2">
+        {/* Playback & Quick Editing Controls */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Play / Reset */}
           <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
               className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold transition flex items-center gap-1"
-              title="Spacebar to toggle play"
+              title="Space to toggle play/pause"
             >
               <span>{isPlaying ? '❚❚' : '▶'}</span>
               <span className="text-[11px] font-mono">{currentTime.toFixed(1)}s</span>
@@ -222,30 +566,117 @@ export function TimelineView({
               type="button"
               onClick={() => {
                 setIsPlaying(false);
-                setCurrentTime(0);
+                updateTime(0);
               }}
               className="px-2 py-1 text-slate-300 hover:text-white transition"
-              title="Return to start"
+              title="Return to start (0s)"
             >
               ⏮
             </button>
           </div>
 
-          {/* Split at playhead button */}
+          {/* Undo & Redo buttons */}
+          {editable && (
+            <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className={`px-2 py-1 rounded transition flex items-center gap-1 ${
+                  undoStack.length > 0
+                    ? 'text-slate-200 hover:bg-slate-700'
+                    : 'text-slate-600 cursor-not-allowed'
+                }`}
+                title="Undo (Ctrl+Z)"
+              >
+                <span>↺</span>
+                <span className="text-[11px]">Undo</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className={`px-2 py-1 rounded transition flex items-center gap-1 ${
+                  redoStack.length > 0
+                    ? 'text-slate-200 hover:bg-slate-700'
+                    : 'text-slate-600 cursor-not-allowed'
+                }`}
+                title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+              >
+                <span>↻</span>
+                <span className="text-[11px]">Redo</span>
+              </button>
+            </div>
+          )}
+
+          {/* Magnetic Snapping Toggle */}
+          <button
+            type="button"
+            onClick={() => setSnappingEnabled(!snappingEnabled)}
+            className={`px-2 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
+              snappingEnabled
+                ? 'bg-cyan-950/80 border-cyan-700/80 text-cyan-300'
+                : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
+            }`}
+            title="Toggle magnetic snapping to clip ends and playhead"
+          >
+            <span>🧲</span>
+            <span className="text-[11px]">Snap: {snappingEnabled ? 'ON' : 'OFF'}</span>
+          </button>
+
+          {/* Split button */}
           {editable && onUpdateTimeline && (
             <button
               type="button"
               onClick={handleSplitAtPlayhead}
               className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1"
-              title="Split clip at playhead"
+              title="Split clip at playhead (Hotkey: S)"
             >
               <span>✂</span>
-              <span>Split</span>
+              <span>Split (S)</span>
+            </button>
+          )}
+
+          {/* Duplicate button */}
+          {editable && selectedClip && (
+            <button
+              type="button"
+              onClick={handleDuplicateSelectedClip}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1"
+              title="Duplicate selected clip (Ctrl+D)"
+            >
+              <span>⧉</span>
+              <span>Duplicate</span>
+            </button>
+          )}
+
+          {/* Delete clip button */}
+          {editable && selectedClip && (
+            <button
+              type="button"
+              onClick={handleDeleteSelectedClip}
+              className="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 text-xs font-medium rounded-lg transition flex items-center gap-1"
+              title="Delete selected clip (Delete / Backspace)"
+            >
+              <span>🗑</span>
+              <span>Delete</span>
+            </button>
+          )}
+
+          {/* Close gaps button */}
+          {editable && (
+            <button
+              type="button"
+              onClick={handleCloseGaps}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition"
+              title="Snap all V1 video clips one after another with no empty gaps"
+            >
+              Close Gaps
             </button>
           )}
 
           {/* Zoom controls */}
-          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 text-xs text-slate-300">
+          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 text-xs text-slate-300 border border-slate-700">
             <button
               type="button"
               onClick={() => setPxPerSec((p) => Math.max(20, p - 10))}
@@ -254,7 +685,7 @@ export function TimelineView({
             >
               -
             </button>
-            <span className="px-2 font-mono text-[11px] text-slate-400">{pxPerSec}px/s</span>
+            <span className="px-1.5 font-mono text-[11px] text-slate-400">{pxPerSec}px/s</span>
             <button
               type="button"
               onClick={() => setPxPerSec((p) => Math.min(100, p + 10))}
@@ -271,7 +702,7 @@ export function TimelineView({
             className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition"
             title="Export Timeline as JSON"
           >
-            Export JSON
+            JSON
           </button>
 
           {editable && onUpdateTimeline && (
@@ -288,40 +719,40 @@ export function TimelineView({
 
       {/* Monitor HUD preview */}
       <div className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center space-x-3">
-          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Playhead Monitor:</span>
+        <div className="flex items-center space-x-3 overflow-hidden">
+          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider shrink-0">Playhead Monitor:</span>
           {activeVideoClip ? (
-            <span className="inline-flex items-center gap-1.5 font-medium text-slate-200">
-              <span className={`w-2 h-2 rounded-full ${activeVideoClip.track === 'V2' ? 'bg-purple-400' : 'bg-blue-400'}`}></span>
-              <span>[{activeVideoClip.track}] {activeVideoClip.name}</span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-slate-200 truncate">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${activeVideoClip.track === 'V2' ? 'bg-purple-400' : 'bg-blue-400'}`}></span>
+              <span className="truncate">[{activeVideoClip.track}] {activeVideoClip.name}</span>
             </span>
           ) : (
-            <span className="text-slate-600 italic">No video clip active at {currentTime.toFixed(1)}s</span>
+            <span className="text-slate-600 italic">Black frame (gap) at {currentTime.toFixed(1)}s</span>
           )}
 
           {activeAudioClip && (
-            <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px]">
+            <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px] shrink-0">
               <span>♫</span>
               <span>{activeAudioClip.name}</span>
             </span>
           )}
 
           {activeEffectClip && (
-            <span className="inline-flex items-center gap-1 text-amber-400 text-[11px]">
+            <span className="inline-flex items-center gap-1 text-amber-400 text-[11px] shrink-0">
               <span>✦</span>
               <span>{activeEffectClip.name}</span>
             </span>
           )}
         </div>
 
-        <div className="font-mono text-[11px] text-slate-400">
+        <div className="font-mono text-[11px] text-slate-400 shrink-0">
           Position: <strong className="text-white">{currentTime.toFixed(2)}s</strong> / {maxTime.toFixed(1)}s
         </div>
       </div>
 
       {/* Add clip modal/panel */}
       {isAddingClip && editable && (
-        <form onSubmit={handleAddClip} className="p-4 bg-slate-950/80 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
+        <form onSubmit={handleAddClip} className="p-4 bg-slate-950/90 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
           <div>
             <label className="block text-slate-400 mb-1">Track</label>
             <select
@@ -406,18 +837,19 @@ export function TimelineView({
           style={{ width: `${Math.max(800, maxTime * pxPerSec + 150)}px` }}
           className="min-w-full relative"
         >
-          {/* Ruler */}
+          {/* Ruler (Click & Drag to Scrub Playhead) */}
           <div
-            onClick={handleRulerClick}
-            className="h-7 bg-slate-950 border-b border-slate-800 flex items-center relative pl-24 cursor-pointer"
+            onMouseDown={handleRulerMouseDown}
+            className="h-7 bg-slate-950 border-b border-slate-800 flex items-center relative pl-24 cursor-ew-resize hover:bg-slate-900 transition"
+            title="Click or drag to scrub playhead"
           >
-            <div className="absolute left-0 top-0 bottom-0 w-24 bg-slate-950 border-r border-slate-800 text-[10px] text-slate-500 uppercase font-semibold flex items-center px-2">
+            <div className="absolute left-0 top-0 bottom-0 w-24 bg-slate-950 border-r border-slate-800 text-[10px] text-slate-500 uppercase font-semibold flex items-center px-2 cursor-default">
               Time (s)
             </div>
             {ticks.map((t) => (
               <div
                 key={t}
-                className="absolute top-0 bottom-0 flex flex-col justify-end text-[10px] font-mono text-slate-500 border-l border-slate-800 pl-1"
+                className="absolute top-0 bottom-0 flex flex-col justify-end text-[10px] font-mono text-slate-500 border-l border-slate-800 pl-1 pointer-events-none"
                 style={{ left: `${96 + t * pxPerSec}px` }}
               >
                 <span>{t}s</span>
@@ -425,18 +857,50 @@ export function TimelineView({
             ))}
           </div>
 
-          {/* Red Playhead Line */}
+          {/* Interactive Red Playhead Line & Scrubber Handle */}
           <div
             style={{ left: `${96 + currentTime * pxPerSec}px` }}
-            className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-30 pointer-events-none shadow-sm"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              setIsScrubbing(true);
+            }}
+            className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-30 cursor-ew-resize hover:w-1 transition-all"
+            title={`Playhead: ${currentTime.toFixed(2)}s (Drag to scrub)`}
           >
-            <div className="w-2.5 h-2.5 bg-rose-500 -ml-1 rounded-full shadow"></div>
+            {/* Playhead Grabber Diamond on Ruler */}
+            <div className="w-3.5 h-3.5 bg-rose-500 -ml-1.5 -mt-0.5 rounded-sm rotate-45 shadow-lg border border-white/60 hover:scale-125 transition-transform cursor-grab active:cursor-grabbing"></div>
           </div>
 
-          {/* Tracks */}
-          <div className="divide-y divide-slate-800/60">
+          {/* Snapping Guide Line Indicator */}
+          {dragState && snappingEnabled && (
+            <div
+              style={{ left: `${96 + dragState.currentStart * pxPerSec}px` }}
+              className="absolute top-0 bottom-0 w-px bg-cyan-400 z-20 pointer-events-none opacity-80"
+            />
+          )}
+
+          {/* Track Lanes */}
+          <div ref={tracksContainerRef} className="divide-y divide-slate-800/60">
             {TRACKS.map((track) => {
-              const trackClips = timeline.clips.filter((c) => c.track === track.id);
+              // Collect clips for this track, taking into account live dragging across tracks
+              const trackClips = timeline.clips
+                .filter((c) => {
+                  if (dragState && c.id === dragState.clipId) {
+                    return dragState.currentTrack === track.id;
+                  }
+                  return c.track === track.id;
+                })
+                .map((c) => {
+                  if (dragState && c.id === dragState.clipId) {
+                    return {
+                      ...c,
+                      start: dragState.currentStart,
+                      dur: dragState.currentDur,
+                      track: dragState.currentTrack,
+                    };
+                  }
+                  return c;
+                });
 
               return (
                 <div key={track.id} className={`h-14 flex relative items-center ${track.bg}`}>
@@ -446,37 +910,71 @@ export function TimelineView({
                     <span className="text-[10px] text-slate-400 truncate">{track.desc}</span>
                   </div>
 
-                  {/* Track lane */}
+                  {/* Track Lane Body */}
                   <div className="relative h-full flex-1">
                     {trackClips.map((clip) => {
                       const left = clip.start * pxPerSec;
                       const width = Math.max(30, clip.dur * pxPerSec);
                       const isSelected = clip.id === selectedClipId;
+                      const isDraggingThis = dragState?.clipId === clip.id;
 
                       return (
                         <div
                           key={clip.id}
-                          onClick={() => setSelectedClipId(clip.id)}
+                          onMouseDown={(e) => handleStartClipDrag(e, clip, 'move')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedClipId(clip.id);
+                          }}
                           style={{
                             left: `${left}px`,
                             width: `${width}px`,
                           }}
-                          className={`absolute top-1.5 bottom-1.5 rounded border px-2 py-1 cursor-pointer transition-all flex flex-col justify-between text-xs overflow-hidden select-none ${track.clipBg} ${
-                            isSelected ? 'ring-2 ring-white shadow-lg z-10 brightness-110' : 'opacity-90'
+                          className={`absolute top-1.5 bottom-1.5 rounded-lg border px-2 py-1 transition-shadow flex flex-col justify-between text-xs overflow-hidden select-none group ${track.clipBg} ${
+                            isDraggingThis
+                              ? 'cursor-grabbing shadow-2xl ring-2 ring-cyan-400 z-30 opacity-95 scale-[1.01]'
+                              : isSelected
+                              ? 'ring-2 ring-white shadow-xl z-20 brightness-110 cursor-grab'
+                              : 'opacity-90 hover:opacity-100 cursor-grab'
                           }`}
                         >
-                          <div className="flex items-center justify-between text-[11px] font-semibold text-white truncate gap-1">
+                          {/* Left Trim Handle */}
+                          {editable && (
+                            <div
+                              onMouseDown={(e) => handleStartClipDrag(e, clip, 'trim-left')}
+                              className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/40 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Trim In-point (Drag to adjust start)"
+                            >
+                              <div className="w-0.5 h-4 bg-white/70 rounded"></div>
+                            </div>
+                          )}
+
+                          {/* Clip Body Title & Speed */}
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-white truncate gap-1 pointer-events-none pl-1 pr-1">
                             <span className="truncate">{clip.name}</span>
                             {clip.speed !== 1 && (
-                              <span className="text-[9px] bg-black/40 px-1 rounded text-white/90">
+                              <span className="text-[9px] bg-black/50 px-1 rounded text-white/90 font-mono">
                                 {clip.speed}x
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] font-mono text-white/80 flex items-center justify-between">
+
+                          {/* Clip Timecode Footer */}
+                          <div className="text-[10px] font-mono text-white/80 flex items-center justify-between pointer-events-none pl-1 pr-1">
                             <span>{clip.start.toFixed(1)}s</span>
                             <span>{clip.dur.toFixed(1)}s</span>
                           </div>
+
+                          {/* Right Trim Handle */}
+                          {editable && (
+                            <div
+                              onMouseDown={(e) => handleStartClipDrag(e, clip, 'trim-right')}
+                              className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/40 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Trim Out-point (Drag to adjust duration)"
+                            >
+                              <div className="w-0.5 h-4 bg-white/70 rounded"></div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -488,7 +986,7 @@ export function TimelineView({
         </div>
       </div>
 
-      {/* Clip Details Inspector */}
+      {/* Selected Clip Inspector */}
       {selectedClip && (
         <div className="p-4 bg-slate-950 border-t border-slate-800 text-xs">
           <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
@@ -500,15 +998,26 @@ export function TimelineView({
               <span className="text-slate-500 font-mono text-[10px]">ID: {selectedClip.id.slice(0, 8)}...</span>
             </div>
 
-            {editable && (
-              <button
-                type="button"
-                onClick={handleDeleteSelectedClip}
-                className="px-2.5 py-1 bg-red-900/50 hover:bg-red-800 text-red-300 rounded border border-red-700/60 transition"
-              >
-                Delete Clip
-              </button>
-            )}
+            <div className="flex items-center space-x-2">
+              {editable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDuplicateSelectedClip}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 transition"
+                  >
+                    Duplicate (Ctrl+D)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelectedClip}
+                    className="px-2.5 py-1 bg-red-900/50 hover:bg-red-800 text-red-300 rounded border border-red-700/60 transition"
+                  >
+                    Delete Clip
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">

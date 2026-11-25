@@ -387,6 +387,8 @@ export default function LeadEditorPage() {
             mediaList={project.media}
             editable={true}
             onUpdateTimeline={handleUpdateActiveTimeline}
+            time={playerTime}
+            onTime={setPlayerTime}
             title="Active Assembly Cut"
           />
         </section>
