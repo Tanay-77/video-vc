@@ -59,5 +59,6 @@ export interface Project {
   snapshots: Snapshot[];
   variations: Variation[];
   reviews: ReviewRequest[];
+  masterDraft?: Timeline | null; // Lead's uncommitted working cut (draft before publishing to Main)
 }
 

@@ -11,6 +11,7 @@ import { DiffViewer } from '@/components/DiffViewer';
 import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, Snapshot, Timeline } from '@/lib/types';
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
+import { diffTimelines } from '@/lib/diff';
 
 export default function LeadEditorPage() {
   const params = useParams();
@@ -30,23 +31,30 @@ export default function LeadEditorPage() {
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [requestChangeNote, setRequestChangeNote] = useState('');
   const [activeReviewAction, setActiveReviewAction] = useState<string | null>(null);
+  const [showDraftDiff, setShowDraftDiff] = useState(false);
 
   const latestSnapshot = project && project.snapshots.length > 0
     ? project.snapshots[project.snapshots.length - 1]
     : null;
 
-  // Active base timeline for lead is the latest snapshot timeline, or empty if none
-  const activeTimeline = latestSnapshot?.timeline || { clips: [] };
+  // Active working timeline for Lead: masterDraft if dirty/uncommitted, otherwise latest snapshot timeline
+  const activeTimeline = project?.masterDraft || latestSnapshot?.timeline || { clips: [] };
 
-  // Handler to update the active timeline (functional state update prevents stale closures)
+  // Calculate uncommitted working draft diff between latest snapshot and masterDraft
+  const draftDiff = React.useMemo(() => {
+    if (!latestSnapshot || !project?.masterDraft) return null;
+    return diffTimelines(latestSnapshot.timeline, project.masterDraft);
+  }, [latestSnapshot, project?.masterDraft]);
+
+  const hasDraftChanges = Boolean(
+    draftDiff && (draftDiff.addedCount > 0 || draftDiff.modifiedCount > 0 || draftDiff.removedCount > 0)
+  );
+
+  // Handler to update the active timeline (updates masterDraft only, keeping snapshots clean and unmutated)
   const handleUpdateActiveTimeline = useCallback((updatedTimeline: Timeline) => {
     setProject((prev) => {
       if (!prev) return prev;
-      const currentLatest = prev.snapshots.length > 0
-        ? prev.snapshots[prev.snapshots.length - 1]
-        : null;
-
-      if (!currentLatest) {
+      if (prev.snapshots.length === 0) {
         const initialSnap: Snapshot = {
           id: `snap_${Date.now()}`,
           parentId: null,
@@ -58,21 +66,59 @@ export default function LeadEditorPage() {
         return {
           ...prev,
           snapshots: [initialSnap],
+          masterDraft: null,
         };
       }
 
-      const updatedSnapshots = [...prev.snapshots];
-      updatedSnapshots[updatedSnapshots.length - 1] = {
-        ...currentLatest,
-        timeline: updatedTimeline,
+      return {
+        ...prev,
+        masterDraft: updatedTimeline,
+      };
+    });
+  }, [setProject, snapshotAuthor]);
+
+  // Handler to publish current working draft to Main as a new formal Snapshot (Commit)
+  const handlePublishDraft = useCallback((customMsg?: string) => {
+    const commitMsg = (customMsg || snapshotMsg).trim() || `Cut update by ${snapshotAuthor || 'Lead Editor'}`;
+    setProject((prev) => {
+      if (!prev) return prev;
+      const currentLatest = prev.snapshots.length > 0
+        ? prev.snapshots[prev.snapshots.length - 1]
+        : null;
+
+      const newSnapshot: Snapshot = {
+        id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        parentId: currentLatest ? currentLatest.id : null,
+        author: snapshotAuthor.trim() || 'Lead Editor',
+        message: commitMsg,
+        createdAt: new Date().toISOString(),
+        timeline: JSON.parse(JSON.stringify(activeTimeline)),
       };
 
       return {
         ...prev,
-        snapshots: updatedSnapshots,
+        snapshots: [...prev.snapshots, newSnapshot],
+        masterDraft: null,
       };
     });
-  }, [setProject, snapshotAuthor]);
+
+    setSnapshotMsg('');
+    setIsCreatingSnapshot(false);
+    setShowDraftDiff(false);
+  }, [snapshotMsg, snapshotAuthor, setProject, activeTimeline]);
+
+  // Handler to discard uncommitted working draft edits
+  const handleDiscardDraft = useCallback(() => {
+    if (!confirm('Discard all uncommitted draft edits and revert to the latest saved Snapshot?')) return;
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        masterDraft: null,
+      };
+    });
+    setShowDraftDiff(false);
+  }, [setProject]);
 
   // Auto-build timeline from uploaded media items (videos on V1, audio on A1)
   const handleAutoBuildTimeline = useCallback((items: MediaItem[]) => {
@@ -134,28 +180,7 @@ export default function LeadEditorPage() {
     e.preventDefault();
     const msg = snapshotMsg.trim();
     if (!msg) return;
-
-    const newSnapshot: Snapshot = {
-      id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      parentId: latestSnapshot ? latestSnapshot.id : null,
-      author: snapshotAuthor.trim() || 'Lead Editor',
-      message: msg,
-      createdAt: new Date().toISOString(),
-      timeline: {
-        clips: latestSnapshot ? JSON.parse(JSON.stringify(latestSnapshot.timeline.clips)) : [],
-      },
-    };
-
-    setProject((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        snapshots: [...prev.snapshots, newSnapshot],
-      };
-    });
-
-    setSnapshotMsg('');
-    setIsCreatingSnapshot(false);
+    handlePublishDraft(msg);
   };
 
   // Handler to add media items to project AND auto-sequence them onto the timeline
@@ -165,27 +190,29 @@ export default function LeadEditorPage() {
       const allMedia = [...prev.media, ...newItems];
       const generatedTimeline = buildTimeline(allMedia);
 
-      let updatedSnapshots = [...prev.snapshots];
-      if (updatedSnapshots.length === 0) {
-        updatedSnapshots = [{
-          id: `snap_${Date.now()}`,
-          parentId: null,
-          author: snapshotAuthor || 'Lead Editor',
-          message: 'Initial cut',
-          createdAt: new Date().toISOString(),
-          timeline: generatedTimeline,
-        }];
-      } else {
-        updatedSnapshots[updatedSnapshots.length - 1] = {
-          ...updatedSnapshots[updatedSnapshots.length - 1],
-          timeline: generatedTimeline,
+      if (prev.snapshots.length === 0) {
+        return {
+          ...prev,
+          media: allMedia,
+          snapshots: [
+            {
+              id: `snap_${Date.now()}`,
+              parentId: null,
+              author: snapshotAuthor || 'Lead Editor',
+              message: 'Initial cut from media import',
+              createdAt: new Date().toISOString(),
+              timeline: generatedTimeline,
+            },
+          ],
+          masterDraft: null,
         };
       }
 
+      // If snapshots already exist, save into working draft so Lead can preview and publish!
       return {
         ...prev,
         media: allMedia,
-        snapshots: updatedSnapshots,
+        masterDraft: generatedTimeline,
       };
     });
     setPlayerTime(0);
@@ -221,6 +248,7 @@ export default function LeadEditorPage() {
       snapshots: [...project.snapshots, mergeSnapshot],
       reviews: updatedReviews,
       variations: updatedVariations,
+      masterDraft: null, // Merged timeline is now the official HEAD snapshot
     });
 
     setSelectedReviewId(null);
@@ -283,13 +311,24 @@ export default function LeadEditorPage() {
               <span>★ Load 6-Clip Sample</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
-            >
-              <span>+ Create Snapshot (Commit)</span>
-            </button>
+            {hasDraftChanges ? (
+              <button
+                type="button"
+                onClick={() => handlePublishDraft()}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition shadow-md flex items-center gap-1.5 animate-pulse"
+                title="Publish your current working draft to Main so collaborators can sync"
+              >
+                <span>🚀 Publish Cut to Main</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+              >
+                <span>+ Create Snapshot (Commit)</span>
+              </button>
+            )}
 
             <Link
               href={`/join/${project.id}`}
@@ -372,15 +411,118 @@ export default function LeadEditorPage() {
         </section>
 
         {/* Master Timeline View */}
-        <section className="space-y-2">
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-              Lead Master Timeline (Head)
+            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span>Lead Master Timeline (Head)</span>
+              {hasDraftChanges ? (
+                <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full font-mono font-semibold">
+                  Unpublished Draft
+                </span>
+              ) : (
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full font-mono font-semibold">
+                  Clean Milestone
+                </span>
+              )}
             </h2>
             <span className="text-xs text-slate-500">
-              Directly editable &bull; Live synced with peer tabs
+              Directly editable &bull; Private draft until published to Main
             </span>
           </div>
+
+          {/* Working Tree / Branch Status Bar */}
+          <div
+            className={`rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
+              hasDraftChanges
+                ? 'bg-amber-950/40 border-amber-600/70 shadow-lg text-amber-200'
+                : 'bg-slate-900 border-slate-800 text-slate-400'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                  hasDraftChanges ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                }`}
+              />
+              <div>
+                {hasDraftChanges ? (
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-amber-300">Working Draft: Unpublished Changes</span>
+                      <span className="font-mono bg-amber-900/60 px-1.5 py-0.5 rounded text-[11px] text-amber-200">
+                        +{draftDiff?.addedCount} added &bull; ~{draftDiff?.modifiedCount} modified &bull; -{draftDiff?.removedCount} removed
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/80">
+                      These edits stay in your private draft. Collaborators won&apos;t be interrupted until you publish.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-300">Clean Master Cut (HEAD)</span>
+                      <span className="font-mono text-slate-500 text-[11px]">
+                        Snapshot #{project.snapshots.length}: &ldquo;{latestSnapshot?.message || 'Initial'}&rdquo;
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Edit freely below. Edits remain private drafts until you click &ldquo;Publish Cut to Main&rdquo;.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {hasDraftChanges && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowDraftDiff(!showDraftDiff)}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded border border-slate-700 transition"
+                >
+                  {showDraftDiff ? 'Hide Draft Diff' : 'Inspect Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-semibold rounded border border-rose-800/60 transition"
+                  title="Discard all uncommitted draft edits and revert to the latest snapshot"
+                >
+                  Discard Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePublishDraft()}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded shadow-md transition flex items-center gap-1.5"
+                  title="Publish changes to Main so collaborators can sync"
+                >
+                  <span>🚀 Publish Cut to Main</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Optional Draft Diff Viewer */}
+          {hasDraftChanges && showDraftDiff && latestSnapshot && project?.masterDraft && (
+            <div className="bg-slate-900 border border-amber-600/50 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span className="font-bold text-amber-300 text-xs">
+                  Diff: Latest Snapshot ({latestSnapshot.id.slice(0, 10)}) &rarr; Current Working Draft
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDraftDiff(false)}
+                  className="text-slate-400 hover:text-white text-xs"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <DiffViewer
+                baseTimeline={latestSnapshot.timeline}
+                variationTimeline={project.masterDraft}
+              />
+            </div>
+          )}
 
           <TimelineView
             timeline={activeTimeline}

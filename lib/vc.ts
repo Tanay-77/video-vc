@@ -163,17 +163,24 @@ export function setSpeed(timeline: Timeline, id: string, speed: number): Timelin
 
 /**
  * Adds a snapshot after the latest one.
- * Uses the latest snapshot's timeline or empty if none.
+ * Uses the explicitly passed timeline, or project.masterDraft, or latest snapshot's timeline.
+ * Clears project.masterDraft upon saving.
  */
 export function saveSnapshot(
   project: Project,
   message: string,
-  author?: string
+  author?: string,
+  timeline?: Timeline
 ): Project {
   const latestSnapshot =
     project.snapshots.length > 0
       ? project.snapshots[project.snapshots.length - 1]
       : null;
+
+  const snapshotTimeline =
+    timeline ||
+    project.masterDraft ||
+    (latestSnapshot ? latestSnapshot.timeline : { clips: [] });
 
   const newSnapshot: Snapshot = {
     id: generateId('snap'),
@@ -181,7 +188,7 @@ export function saveSnapshot(
     author: author || (latestSnapshot ? latestSnapshot.author : 'Lead Editor'),
     message,
     createdAt: new Date().toISOString(),
-    timeline: latestSnapshot ? deepClone(latestSnapshot.timeline) : { clips: [] },
+    timeline: deepClone(snapshotTimeline),
   };
 
   return {
@@ -190,6 +197,17 @@ export function saveSnapshot(
     snapshots: [...project.snapshots.map((s) => deepClone(s)), newSnapshot],
     variations: [...project.variations.map((v) => deepClone(v))],
     reviews: [...project.reviews.map((r) => ({ ...r }))],
+    masterDraft: null,
+  };
+}
+
+/**
+ * Discards uncommitted working draft on Main and reverts to latest snapshot timeline.
+ */
+export function discardMasterDraft(project: Project): Project {
+  return {
+    ...project,
+    masterDraft: null,
   };
 }
 

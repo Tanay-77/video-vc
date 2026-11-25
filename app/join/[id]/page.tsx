@@ -11,6 +11,7 @@ import { DiffViewer } from '@/components/DiffViewer';
 import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, ReviewRequest, Timeline, Variation } from '@/lib/types';
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
+import { diffTimelines } from '@/lib/diff';
 
 export default function CollaboratorPage() {
   const params = useParams();
@@ -53,6 +54,114 @@ export default function CollaboratorPage() {
   const baseSnapshot = activeVariation
     ? project?.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || latestSnapshot
     : latestSnapshot;
+
+  // Check if Main has published new snapshot(s) since this variation was created
+  const isBaseSnapshotOutdated = Boolean(
+    activeVariation && latestSnapshot && activeVariation.baseSnapshotId !== latestSnapshot.id
+  );
+
+  // Compute 3-way diff between base snapshot and latest published snapshot on Main
+  const mainDiff = React.useMemo(() => {
+    if (!isBaseSnapshotOutdated || !baseSnapshot || !latestSnapshot) return null;
+    return diffTimelines(baseSnapshot.timeline, latestSnapshot.timeline);
+  }, [isBaseSnapshotOutdated, baseSnapshot, latestSnapshot]);
+
+  // Specific changes that Main made since baseSnapshot
+  const baseTimelineClips = baseSnapshot?.timeline.clips || [];
+  const latestMainClips = latestSnapshot?.timeline.clips || [];
+  const latestMainClipIds = new Set(latestMainClips.map((c) => c.id));
+  const baseClipIds = new Set(baseTimelineClips.map((c) => c.id));
+
+  // Clips that were in baseSnapshot but deleted on Main in the latest published snapshot
+  const deletedOnMain = isBaseSnapshotOutdated
+    ? baseTimelineClips.filter((c) => !latestMainClipIds.has(c.id))
+    : [];
+
+  // Clips that were not in baseSnapshot but added on Main in the latest published snapshot
+  const addedOnMain = isBaseSnapshotOutdated
+    ? latestMainClips.filter((c) => !baseClipIds.has(c.id))
+    : [];
+
+  const hasMainChanges = isBaseSnapshotOutdated;
+
+  // Sync Lead's latest published snapshot into the active variation (rebase)
+  const handleSyncWithMain = useCallback(() => {
+    if (!activeVariation || !latestSnapshot) return;
+
+    setProject((prev) => {
+      if (!prev) return prev;
+      const currentMain = prev.snapshots.length > 0 ? prev.snapshots[prev.snapshots.length - 1] : null;
+      if (!currentMain) return prev;
+
+      const mainClips = currentMain.timeline.clips;
+      const mainClipMap = new Map(mainClips.map((c) => [c.id, c]));
+
+      // 1. Remove clips that the Lead deleted on Main (if they were part of base)
+      const baseSnap = prev.snapshots.find((s) => s.id === activeVariation.baseSnapshotId);
+      const baseClipIdsSet = new Set(baseSnap?.timeline.clips.map((c) => c.id) || []);
+
+      // Retain variation clips unless they were in base and deleted on Main
+      const updatedClips = activeVariation.timeline.clips.filter((c) => {
+        if (baseClipIdsSet.has(c.id) && !mainClipMap.has(c.id)) {
+          return false; // Deleted on Main!
+        }
+        return true;
+      });
+
+      // 2. Bring in any new clips from Main that weren't in base or variation
+      const currentVarClipIds = new Set(updatedClips.map((c) => c.id));
+      for (const mc of mainClips) {
+        if (!currentVarClipIds.has(mc.id)) {
+          updatedClips.push({ ...mc });
+        }
+      }
+
+      const updatedVariations = prev.variations.map((v) => {
+        if (v.id === activeVariation.id) {
+          return {
+            ...v,
+            baseSnapshotId: currentMain.id,
+            timeline: { clips: updatedClips },
+          };
+        }
+        return v;
+      });
+
+      return {
+        ...prev,
+        variations: updatedVariations,
+      };
+    });
+  }, [activeVariation, latestSnapshot, setProject]);
+
+  // Reset variation completely to match Main
+  const handleResetToMain = useCallback(() => {
+    if (!activeVariation || !latestSnapshot) return;
+    if (!confirm('Reset this variation to match the latest Master timeline from Lead? This will overwrite your variation cuts.')) return;
+
+    setProject((prev) => {
+      if (!prev) return prev;
+      const currentMain = prev.snapshots.length > 0 ? prev.snapshots[prev.snapshots.length - 1] : null;
+      if (!currentMain) return prev;
+
+      const updatedVariations = prev.variations.map((v) => {
+        if (v.id === activeVariation.id) {
+          return {
+            ...v,
+            baseSnapshotId: currentMain.id,
+            timeline: JSON.parse(JSON.stringify(currentMain.timeline)),
+            status: 'editing' as const,
+          };
+        }
+        return v;
+      });
+
+      return {
+        ...prev,
+        variations: updatedVariations,
+      };
+    });
+  }, [activeVariation, latestSnapshot, setProject]);
 
   // Handler to update the active variation timeline
   const handleUpdateVariationTimeline = useCallback((updatedTimeline: Timeline) => {
@@ -450,6 +559,53 @@ export default function CollaboratorPage() {
               Send Review Request to Lead
             </button>
           </form>
+        )}
+
+        {/* Banner: Main published new snapshot(s) */}
+        {hasMainChanges && activeVariation && latestSnapshot && (
+          <div className="p-4 bg-indigo-950/40 border border-indigo-700/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-lg">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-bold text-indigo-300">
+                <span className="text-sm">📢 Lead Published New Cut on Main</span>
+                <span className="text-[10px] bg-indigo-900 text-indigo-200 border border-indigo-700/60 px-2 py-0.5 rounded-full font-mono">
+                  &ldquo;{latestSnapshot.message}&rdquo;
+                </span>
+                {deletedOnMain.length > 0 && (
+                  <span className="text-[10px] bg-rose-900/80 text-rose-200 border border-rose-700/60 px-2 py-0.5 rounded-full font-mono">
+                    {deletedOnMain.length} clip{deletedOnMain.length !== 1 ? 's' : ''} deleted
+                  </span>
+                )}
+                {addedOnMain.length > 0 && (
+                  <span className="text-[10px] bg-emerald-900/80 text-emerald-200 border border-emerald-700/60 px-2 py-0.5 rounded-full font-mono">
+                    {addedOnMain.length} clip{addedOnMain.length !== 1 ? 's' : ''} added
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-300 text-xs">
+                Main moved to Snapshot <span className="font-mono text-indigo-300">{latestSnapshot.id.slice(0, 10)}</span> ({latestSnapshot.author}).
+                Your branch is isolated so your work isn&apos;t disrupted. Click <strong>Sync from Main</strong> to rebase Lead&apos;s published updates into this variation.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSyncWithMain}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-xs transition shadow flex items-center gap-1.5"
+                title="Pull Lead's latest published snapshot into this variation"
+              >
+                <span>↻ Sync from Main (Rebase)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToMain}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700 transition"
+                title="Reset this variation completely to match Master"
+              >
+                Reset to Main
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Variation Preview Player & Timeline */}

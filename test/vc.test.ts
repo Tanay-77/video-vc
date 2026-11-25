@@ -8,6 +8,7 @@ import {
   addClip,
   setSpeed,
   saveSnapshot,
+  discardMasterDraft,
   sendForReview,
   combine,
   isClash,
@@ -180,6 +181,47 @@ describe('lib/vc.ts - Pure Immutable Version Control Functions', () => {
 
       // Immutability
       expect(project.snapshots.length).toBe(1);
+    });
+
+    it('uses masterDraft when saving a snapshot and resets masterDraft to null', () => {
+      const project = createProject('Draft Film', sampleTimeline, 'Lead');
+      const draftTimeline: Timeline = {
+        clips: [
+          {
+            id: 'clip-new-draft',
+            mediaId: 'media-draft',
+            track: 'V1',
+            name: 'New Draft Cut',
+            start: 0,
+            dur: 10.0,
+            sourceIn: 0,
+            sourceOut: 10.0,
+            speed: 1.0,
+          },
+        ],
+      };
+
+      const projectWithDraft = { ...project, masterDraft: draftTimeline };
+      const saved = saveSnapshot(projectWithDraft, 'Published working draft', 'Lead');
+
+      expect(saved.snapshots.length).toBe(2);
+      expect(saved.snapshots[1].message).toBe('Published working draft');
+      expect(saved.snapshots[1].timeline.clips.length).toBe(1);
+      expect(saved.snapshots[1].timeline.clips[0].id).toBe('clip-new-draft');
+      expect(saved.masterDraft).toBeNull();
+    });
+
+    it('discardMasterDraft resets masterDraft without modifying snapshots', () => {
+      const project = createProject('Draft Film', sampleTimeline, 'Lead');
+      const projectWithDraft = {
+        ...project,
+        masterDraft: { clips: [] },
+      };
+
+      const discarded = discardMasterDraft(projectWithDraft);
+      expect(discarded.masterDraft).toBeNull();
+      expect(discarded.snapshots.length).toBe(1);
+      expect(discarded.snapshots[0].timeline.clips.length).toBe(2);
     });
   });
 
