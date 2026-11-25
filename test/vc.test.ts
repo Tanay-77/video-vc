@@ -9,11 +9,14 @@ import {
   setSpeed,
   saveSnapshot,
   discardMasterDraft,
+  hasTrackOverlaps,
+  preventOverlaps,
   sendForReview,
   combine,
   isClash,
+  rebaseVariation,
 } from '../lib/vc';
-import { Clip, Timeline } from '../lib/types';
+import { Clip, Timeline, Snapshot, Variation } from '../lib/types';
 
 describe('lib/vc.ts - Pure Immutable Version Control Functions', () => {
   const sampleClip1: Clip = {
@@ -319,6 +322,207 @@ describe('lib/vc.ts - Pure Immutable Version Control Functions', () => {
       expect(projectWithMainAdvanced.snapshots.length).toBe(2);
       expect(projectWithMainAdvanced.reviews[0].status).toBe('open');
       expect(projectWithMainAdvanced.variations[0].status).toBe('in-review');
+    });
+  });
+
+  describe('Track Overlap Prevention (hasTrackOverlaps & preventOverlaps)', () => {
+    it('hasTrackOverlaps: detects when two clips on the same track overlap in time', () => {
+      const overlapping: Timeline = {
+        clips: [
+          { ...sampleClip1, track: 'V1', start: 0, dur: 5.0 },
+          { ...sampleClip2, track: 'V1', start: 2.0, dur: 4.0 }, // Overlaps between 2.0s and 5.0s!
+        ],
+      };
+      expect(hasTrackOverlaps(overlapping)).toBe(true);
+    });
+
+    it('hasTrackOverlaps: allows clips on different tracks to play simultaneously without flagging overlap', () => {
+      const multiTrack: Timeline = {
+        clips: [
+          { ...sampleClip1, track: 'V1', start: 0, dur: 5.0 }, // Primary video
+          { ...sampleClip2, track: 'V2', start: 1.0, dur: 3.0 }, // B-Roll overlay
+          { ...sampleClip1, id: 'audio-bgm', track: 'A1', start: 0, dur: 10.0 }, // BGM
+        ],
+      };
+      expect(hasTrackOverlaps(multiTrack)).toBe(false);
+    });
+
+    it('preventOverlaps: resolves overlapping clips on the same track sequentially', () => {
+      const overlapping: Timeline = {
+        clips: [
+          { ...sampleClip1, track: 'V1', start: 0, dur: 5.0 },
+          { ...sampleClip2, track: 'V1', start: 2.0, dur: 4.0 }, // Overlaps!
+        ],
+      };
+
+      const resolved = preventOverlaps(overlapping);
+      expect(hasTrackOverlaps(resolved)).toBe(false);
+
+      const clip1 = resolved.clips.find((c) => c.id === sampleClip1.id);
+      const clip2 = resolved.clips.find((c) => c.id === sampleClip2.id);
+
+      expect(clip1?.start).toBe(0);
+      expect(clip1?.dur).toBe(5.0);
+      expect(clip2?.start).toBe(5.0); // Shifted flush to clip1's end
+      expect(clip2?.dur).toBe(4.0);
+    });
+
+    it('preventOverlaps with priorityClipId: preserves priority clip position and shifts colliding clips forward', () => {
+      const timeline: Timeline = {
+        clips: [
+          { ...sampleClip1, track: 'V1', start: 0, dur: 8.0 },
+          { ...sampleClip2, track: 'V1', start: 3.0, dur: 4.0 }, // Dragged or added into 3.0s!
+        ],
+      };
+
+      // Clip 2 has priority at 3.0s
+      const resolved = preventOverlaps(timeline, sampleClip2.id);
+      expect(hasTrackOverlaps(resolved)).toBe(false);
+
+      const clip2 = resolved.clips.find((c) => c.id === sampleClip2.id);
+      expect(clip2?.start).toBe(3.0);
+    });
+  });
+
+  describe('rebaseVariation (Git pull --rebase semantics)', () => {
+    it('applies Lead trims cleanly to the variation without duplicate clips or gaps', () => {
+      const baseSnap: Snapshot = {
+        id: 'snap-1',
+        parentId: null,
+        author: 'Alex (Lead)',
+        message: 'Initial cut',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'c1', mediaId: 'm1', track: 'V1', name: 'clip_1.mp4', start: 0, dur: 10.0, sourceIn: 0, sourceOut: 10.0, speed: 1 },
+            { id: 'c2', mediaId: 'm2', track: 'V1', name: 'clip_2.mp4', start: 10.0, dur: 8.0, sourceIn: 0, sourceOut: 8.0, speed: 1 },
+          ],
+        },
+      };
+
+      // Collaborator variation branched from snap-1
+      const variation: Variation = {
+        id: 'var-1',
+        name: "Jordan's Cut",
+        author: 'Jordan',
+        baseSnapshotId: 'snap-1',
+        status: 'editing',
+        timeline: JSON.parse(JSON.stringify(baseSnap.timeline)),
+      };
+
+      // Lead trims clip 1 from 10.0s down to 6.3s, moves clip 2 to 6.3s, and pushes snap-2
+      const mainSnap: Snapshot = {
+        id: 'snap-2',
+        parentId: 'snap-1',
+        author: 'Alex (Lead)',
+        message: 'Trimmed intro clip to 6.3s',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'c1', mediaId: 'm1', track: 'V1', name: 'clip_1.mp4', start: 0, dur: 6.3, sourceIn: 0, sourceOut: 6.3, speed: 1 },
+            { id: 'c2', mediaId: 'm2', track: 'V1', name: 'clip_2.mp4', start: 6.3, dur: 8.0, sourceIn: 0, sourceOut: 8.0, speed: 1 },
+          ],
+        },
+      };
+
+      const rebased = rebaseVariation(variation, baseSnap, mainSnap);
+
+      expect(rebased.baseSnapshotId).toBe('snap-2');
+      expect(rebased.timeline.clips.length).toBe(2); // NO duplicates!
+      expect(rebased.timeline.clips[0].dur).toBe(6.3);
+      expect(rebased.timeline.clips[0].start).toBe(0);
+      expect(rebased.timeline.clips[1].start).toBe(6.3);
+      expect(rebased.timeline.clips[1].dur).toBe(8.0);
+    });
+
+    it('matches clips by mediaId + track even if clip IDs differed', () => {
+      const baseSnap: Snapshot = {
+        id: 'snap-1',
+        parentId: null,
+        author: 'Alex',
+        message: 'Base cut',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'main-c1', mediaId: 'm1', track: 'V1', name: 'waves.mp4', start: 0, dur: 10.0, sourceIn: 0, sourceOut: 10.0, speed: 1 },
+          ],
+        },
+      };
+
+      const variation: Variation = {
+        id: 'var-1',
+        name: 'Var',
+        author: 'Jordan',
+        baseSnapshotId: 'snap-1',
+        status: 'editing',
+        timeline: {
+          clips: [
+            { id: 'var-c1', mediaId: 'm1', track: 'V1', name: 'waves.mp4', start: 0, dur: 10.0, sourceIn: 0, sourceOut: 10.0, speed: 1 },
+          ],
+        },
+      };
+
+      const mainSnap: Snapshot = {
+        id: 'snap-2',
+        parentId: 'snap-1',
+        author: 'Alex',
+        message: 'Trimmed waves',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'main-c1', mediaId: 'm1', track: 'V1', name: 'waves.mp4', start: 0, dur: 6.3, sourceIn: 0, sourceOut: 6.3, speed: 1 },
+          ],
+        },
+      };
+
+      const rebased = rebaseVariation(variation, baseSnap, mainSnap);
+      expect(rebased.timeline.clips.length).toBe(1); // Exactly 1, no duplicate
+      expect(rebased.timeline.clips[0].dur).toBe(6.3);
+    });
+
+    it('removes clips deleted on Main and adds new clips added on Main', () => {
+      const baseSnap: Snapshot = {
+        id: 'snap-1',
+        parentId: null,
+        author: 'Alex',
+        message: 'Base cut',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'c1', mediaId: 'm1', track: 'V1', name: 'clip1', start: 0, dur: 5.0, sourceIn: 0, sourceOut: 5.0, speed: 1 },
+            { id: 'c2', mediaId: 'm2', track: 'V1', name: 'clip2', start: 5.0, dur: 5.0, sourceIn: 0, sourceOut: 5.0, speed: 1 },
+          ],
+        },
+      };
+
+      const variation: Variation = {
+        id: 'var-1',
+        name: 'Var',
+        author: 'Jordan',
+        baseSnapshotId: 'snap-1',
+        status: 'editing',
+        timeline: JSON.parse(JSON.stringify(baseSnap.timeline)),
+      };
+
+      // Main deleted c2 and added c3
+      const mainSnap: Snapshot = {
+        id: 'snap-2',
+        parentId: 'snap-1',
+        author: 'Alex',
+        message: 'Replaced clip2 with clip3',
+        createdAt: new Date().toISOString(),
+        timeline: {
+          clips: [
+            { id: 'c1', mediaId: 'm1', track: 'V1', name: 'clip1', start: 0, dur: 5.0, sourceIn: 0, sourceOut: 5.0, speed: 1 },
+            { id: 'c3', mediaId: 'm3', track: 'V1', name: 'clip3', start: 5.0, dur: 4.0, sourceIn: 0, sourceOut: 4.0, speed: 1 },
+          ],
+        },
+      };
+
+      const rebased = rebaseVariation(variation, baseSnap, mainSnap);
+      expect(rebased.timeline.clips.length).toBe(2);
+      expect(rebased.timeline.clips.find((c) => c.id === 'c2')).toBeUndefined();
+      expect(rebased.timeline.clips.find((c) => c.id === 'c3')).toBeDefined();
     });
   });
 });

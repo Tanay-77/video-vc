@@ -8,12 +8,14 @@ interface DropzoneProps {
   mediaItems: MediaItem[];
   onMediaAdded: (items: MediaItem[]) => void;
   onBuildTimeline?: (items: MediaItem[]) => void;
+  onAddMediaToTimeline?: (item: MediaItem) => void;
 }
 
 export function Dropzone({
   mediaItems,
   onMediaAdded,
   onBuildTimeline,
+  onAddMediaToTimeline,
 }: DropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -210,9 +212,22 @@ export function Dropzone({
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                    <span>{formatSize(item.size)}</span>
-                    <span className="text-slate-600 text-[10px]">id: {item.id.slice(0, 8)}</span>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <span>{formatSize(item.size)}</span>
+                      <span className="text-slate-600 text-[10px]">id: {item.id.slice(0, 8)}</span>
+                    </div>
+
+                    {onAddMediaToTimeline && (
+                      <button
+                        type="button"
+                        onClick={() => onAddMediaToTimeline(item)}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-semibold transition flex items-center gap-1 shadow-sm shrink-0"
+                        title={`Directly add "${item.name}" (${item.duration.toFixed(1)}s) to timeline with full duration`}
+                      >
+                        <span>+ Add to Timeline</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );

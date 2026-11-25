@@ -12,6 +12,7 @@ import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, ReviewRequest, Timeline, Variation } from '@/lib/types';
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 import { diffTimelines } from '@/lib/diff';
+import { hasTrackOverlaps, preventOverlaps, rebaseVariation } from '@/lib/vc';
 
 export default function CollaboratorPage() {
   const params = useParams();
@@ -39,6 +40,11 @@ export default function CollaboratorPage() {
     ? project.snapshots[project.snapshots.length - 1]
     : null;
 
+  // The newest snapshot that contains clips (avoids diffing against empty snap_init)
+  const latestWithClips = project
+    ? [...project.snapshots].reverse().find((s) => s.timeline.clips.length > 0) || latestSnapshot
+    : null;
+
   // Active variation: selected one or default to the first one available
   const activeVariation =
     project?.variations.find((v) => v.id === selectedVariationId) ||
@@ -55,36 +61,32 @@ export default function CollaboratorPage() {
     ? project?.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || latestSnapshot
     : latestSnapshot;
 
-  // Check if Main has published new snapshot(s) since this variation was created
+  // Check if Main has pushed new snapshot(s) since this variation was created/synced
   const isBaseSnapshotOutdated = Boolean(
     activeVariation && latestSnapshot && activeVariation.baseSnapshotId !== latestSnapshot.id
   );
 
-  // Compute 3-way diff between base snapshot and latest published snapshot on Main
+  // Compute diff between base snapshot and latest pushed snapshot on Main
   const mainDiff = React.useMemo(() => {
     if (!isBaseSnapshotOutdated || !baseSnapshot || !latestSnapshot) return null;
     return diffTimelines(baseSnapshot.timeline, latestSnapshot.timeline);
   }, [isBaseSnapshotOutdated, baseSnapshot, latestSnapshot]);
 
-  // Specific changes that Main made since baseSnapshot
-  const baseTimelineClips = baseSnapshot?.timeline.clips || [];
-  const latestMainClips = latestSnapshot?.timeline.clips || [];
-  const latestMainClipIds = new Set(latestMainClips.map((c) => c.id));
-  const baseClipIds = new Set(baseTimelineClips.map((c) => c.id));
-
-  // Clips that were in baseSnapshot but deleted on Main in the latest published snapshot
-  const deletedOnMain = isBaseSnapshotOutdated
-    ? baseTimelineClips.filter((c) => !latestMainClipIds.has(c.id))
-    : [];
-
-  // Clips that were not in baseSnapshot but added on Main in the latest published snapshot
-  const addedOnMain = isBaseSnapshotOutdated
-    ? latestMainClips.filter((c) => !baseClipIds.has(c.id))
-    : [];
-
   const hasMainChanges = isBaseSnapshotOutdated;
 
-  // Sync Lead's latest published snapshot into the active variation (rebase)
+  const trimmedClipsOnMain = mainDiff
+    ? mainDiff.items.filter((i) => i.flags.includes('trimmed') || i.flags.includes('moved'))
+    : [];
+
+  const addedOnMain = mainDiff
+    ? mainDiff.items.filter((i) => i.status === 'added')
+    : [];
+
+  const deletedOnMain = mainDiff
+    ? mainDiff.items.filter((i) => i.status === 'removed')
+    : [];
+
+  // Sync Lead's pushed snapshot into the active variation (Git pull --rebase)
   const handleSyncWithMain = useCallback(() => {
     if (!activeVariation || !latestSnapshot) return;
 
@@ -93,36 +95,12 @@ export default function CollaboratorPage() {
       const currentMain = prev.snapshots.length > 0 ? prev.snapshots[prev.snapshots.length - 1] : null;
       if (!currentMain) return prev;
 
-      const mainClips = currentMain.timeline.clips;
-      const mainClipMap = new Map(mainClips.map((c) => [c.id, c]));
-
-      // 1. Remove clips that the Lead deleted on Main (if they were part of base)
-      const baseSnap = prev.snapshots.find((s) => s.id === activeVariation.baseSnapshotId);
-      const baseClipIdsSet = new Set(baseSnap?.timeline.clips.map((c) => c.id) || []);
-
-      // Retain variation clips unless they were in base and deleted on Main
-      const updatedClips = activeVariation.timeline.clips.filter((c) => {
-        if (baseClipIdsSet.has(c.id) && !mainClipMap.has(c.id)) {
-          return false; // Deleted on Main!
-        }
-        return true;
-      });
-
-      // 2. Bring in any new clips from Main that weren't in base or variation
-      const currentVarClipIds = new Set(updatedClips.map((c) => c.id));
-      for (const mc of mainClips) {
-        if (!currentVarClipIds.has(mc.id)) {
-          updatedClips.push({ ...mc });
-        }
-      }
+      const baseSnap = prev.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || prev.snapshots[0];
+      const rebased = rebaseVariation(activeVariation, baseSnap, currentMain);
 
       const updatedVariations = prev.variations.map((v) => {
         if (v.id === activeVariation.id) {
-          return {
-            ...v,
-            baseSnapshotId: currentMain.id,
-            timeline: { clips: updatedClips },
-          };
+          return rebased;
         }
         return v;
       });
@@ -134,10 +112,10 @@ export default function CollaboratorPage() {
     });
   }, [activeVariation, latestSnapshot, setProject]);
 
-  // Reset variation completely to match Main
+  // Reset variation completely to match Main's pushed snapshot (like git reset --hard)
   const handleResetToMain = useCallback(() => {
     if (!activeVariation || !latestSnapshot) return;
-    if (!confirm('Reset this variation to match the latest Master timeline from Lead? This will overwrite your variation cuts.')) return;
+    if (!confirm('Reset this variation to match the latest pushed snapshot from Lead? This will overwrite your variation cuts.')) return;
 
     setProject((prev) => {
       if (!prev) return prev;
@@ -169,12 +147,15 @@ export default function CollaboratorPage() {
 
     setProject((prev) => {
       if (!prev) return prev;
+      const currentMain = prev.snapshots.length > 0 ? prev.snapshots[prev.snapshots.length - 1] : null;
       const updatedVariations = prev.variations.map((v) => {
         if (v.id === activeVariation.id) {
           return {
             ...v,
             timeline: updatedTimeline,
-            status: v.status === 'combined' ? v.status : ('editing' as const),
+            status: 'editing' as const,
+            // If variation was previously combined into Main, re-anchor new diff to current Main
+            baseSnapshotId: v.status === 'combined' && currentMain ? currentMain.id : v.baseSnapshotId,
           };
         }
         return v;
@@ -187,6 +168,26 @@ export default function CollaboratorPage() {
     });
   }, [activeVariation, setProject]);
 
+  // Re-open a merged variation so the collaborator can continue editing and submit a new review
+  const handleReopenVariation = useCallback(() => {
+    if (!activeVariation) return;
+    setProject((prev) => {
+      if (!prev) return prev;
+      const currentMain = prev.snapshots.length > 0 ? prev.snapshots[prev.snapshots.length - 1] : null;
+      const updatedVariations = prev.variations.map((v) => {
+        if (v.id === activeVariation.id) {
+          return {
+            ...v,
+            status: 'editing' as const,
+            baseSnapshotId: currentMain ? currentMain.id : v.baseSnapshotId,
+          };
+        }
+        return v;
+      });
+      return { ...prev, variations: updatedVariations };
+    });
+  }, [activeVariation, setProject]);
+
   // Auto-build timeline from uploaded media items
   const handleAutoBuildTimeline = useCallback((items: MediaItem[]) => {
     const mediaToBuild = items && items.length > 0 ? items : (project?.media || []);
@@ -195,12 +196,103 @@ export default function CollaboratorPage() {
     setPlayerTime(0);
   }, [handleUpdateVariationTimeline, project?.media]);
 
-  // If active variation has no clips yet but project has media, auto-populate the variation timeline
-  useEffect(() => {
-    if (activeVariation && activeVariation.timeline.clips.length === 0 && project && project.media.length > 0) {
-      handleAutoBuildTimeline(project.media);
+  // Directly add a single media item with its full duration to the variation timeline (no duration prompt)
+  const handleAddMediaToTimeline = useCallback((item: MediaItem) => {
+    if (!activeVariation) return;
+
+    const isAudio =
+      item.name.toLowerCase().endsWith('.mp3') ||
+      item.name.toLowerCase().endsWith('.wav') ||
+      item.name.toLowerCase().endsWith('.m4a') ||
+      item.name.toLowerCase().endsWith('.aac') ||
+      item.name.toLowerCase().endsWith('.flac');
+
+    const targetTrack = isAudio ? 'A1' : 'V1';
+    const trackClips = activeVariation.timeline.clips.filter((c) => c.track === targetTrack);
+    const endOfTrack = trackClips.length > 0
+      ? Math.max(...trackClips.map((c) => c.start + c.dur))
+      : 0;
+
+    // Check if playerTime falls inside an existing clip on this track
+    let startPos = parseFloat(endOfTrack.toFixed(2));
+    if (playerTime > 0) {
+      const isInside = trackClips.some((c) => playerTime >= c.start && playerTime < c.start + c.dur);
+      if (!isInside && playerTime >= endOfTrack) {
+        startPos = parseFloat(playerTime.toFixed(2));
+      }
     }
-  }, [activeVariation, project, handleAutoBuildTimeline]);
+
+    const newClip: Clip = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
+      track: targetTrack,
+      name: item.name,
+      mediaId: item.id,
+      start: startPos,
+      dur: item.duration,
+      sourceIn: 0,
+      sourceOut: item.duration,
+      speed: 1.0,
+    };
+
+    const resolved = preventOverlaps({
+      clips: [...activeVariation.timeline.clips, newClip],
+    }, newClip.id);
+
+    handleUpdateVariationTimeline(resolved);
+  }, [activeVariation, playerTime, handleUpdateVariationTimeline]);
+
+  // Auto-untangle any overlapping clips on the variation timeline
+  useEffect(() => {
+    if (activeVariation && hasTrackOverlaps(activeVariation.timeline)) {
+      handleUpdateVariationTimeline(preventOverlaps(activeVariation.timeline));
+    }
+  }, [activeVariation, handleUpdateVariationTimeline]);
+
+  // Auto-branch initial variation if project has snapshots or media but no variations yet
+  useEffect(() => {
+    if (project && project.variations.length === 0) {
+      const baseSnap = latestWithClips || latestSnapshot;
+      const sourceClips =
+        baseSnap && baseSnap.timeline.clips.length > 0
+          ? baseSnap.timeline.clips
+          : project.masterDraft && project.masterDraft.clips.length > 0
+            ? project.masterDraft.clips
+            : project.media && project.media.length > 0
+              ? buildTimeline(project.media).clips
+              : [];
+
+      if (sourceClips.length > 0) {
+        const initialVar: Variation = {
+          id: `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: "Collaborator's Cut",
+          author: 'Jordan (Collaborator)',
+          baseSnapshotId: baseSnap ? baseSnap.id : '',
+          timeline: { clips: JSON.parse(JSON.stringify(sourceClips)) },
+          status: 'editing',
+        };
+        setProject((prev) => {
+          if (!prev || prev.variations.length > 0) return prev;
+          return {
+            ...prev,
+            variations: [initialVar],
+          };
+        });
+        setSelectedVariationId(initialVar.id);
+      }
+    }
+  }, [project, latestWithClips, latestSnapshot, setProject]);
+
+  // If active variation has no clips yet but project has media or snapshot clips, populate it
+  useEffect(() => {
+    if (activeVariation && activeVariation.timeline.clips.length === 0 && project) {
+      const baseSnap = latestWithClips || latestSnapshot;
+      if (baseSnap && baseSnap.timeline.clips.length > 0) {
+        handleUpdateVariationTimeline(JSON.parse(JSON.stringify(baseSnap.timeline)));
+      } else if (project.media.length > 0) {
+        handleAutoBuildTimeline(project.media);
+      }
+    }
+  }, [activeVariation, project, latestWithClips, latestSnapshot, handleUpdateVariationTimeline, handleAutoBuildTimeline]);
 
   if (isLoading) {
     return (
@@ -239,12 +331,24 @@ export default function CollaboratorPage() {
     const name = varName.trim();
     if (!name) return;
 
-    const baseSnapId = varBaseSnapshotId || (latestSnapshot ? latestSnapshot.id : '');
-    const baseSnap = project.snapshots.find((s) => s.id === baseSnapId) || latestSnapshot;
+    // Default to the newest snapshot with clips if available
+    const baseSnapId = varBaseSnapshotId || (latestWithClips ? latestWithClips.id : latestSnapshot ? latestSnapshot.id : '');
+    const baseSnap = project.snapshots.find((s) => s.id === baseSnapId) || latestWithClips || latestSnapshot;
+
+    // Resolve source clips: from baseSnap if it has clips, else from masterDraft, else from media build
+    const sourceClips = (baseSnap && baseSnap.timeline.clips.length > 0)
+      ? baseSnap.timeline.clips
+      : (project.masterDraft && project.masterDraft.clips.length > 0)
+        ? project.masterDraft.clips
+        : (latestWithClips && latestWithClips.timeline.clips.length > 0)
+          ? latestWithClips.timeline.clips
+          : (project.media && project.media.length > 0)
+            ? buildTimeline(project.media).clips
+            : [];
 
     const newVarId = `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const clonedTimeline: Timeline = {
-      clips: baseSnap ? JSON.parse(JSON.stringify(baseSnap.timeline.clips)) : [],
+      clips: JSON.parse(JSON.stringify(sourceClips)),
     };
 
     const newVariation: Variation = {
@@ -280,10 +384,16 @@ export default function CollaboratorPage() {
     const msg = reviewMessage.trim();
     if (!msg) return;
 
+    // If activeVariation's baseSnapshotId points to an empty snapshot, re-anchor to latestWithClips
+    const baseSnapObj = project.snapshots.find((s) => s.id === activeVariation.baseSnapshotId);
+    const validBaseSnapId = (baseSnapObj && baseSnapObj.timeline.clips.length > 0)
+      ? activeVariation.baseSnapshotId
+      : (latestWithClips ? latestWithClips.id : activeVariation.baseSnapshotId);
+
     const newReview: ReviewRequest = {
       id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       variationId: activeVariation.id,
-      baseSnapshotId: activeVariation.baseSnapshotId,
+      baseSnapshotId: validBaseSnapId,
       message: msg,
       status: 'open',
     };
@@ -421,13 +531,13 @@ export default function CollaboratorPage() {
               <div>
                 <label className="block text-slate-400 mb-1">Base Snapshot</label>
                 <select
-                  value={varBaseSnapshotId || latestSnapshot?.id || ''}
+                  value={varBaseSnapshotId || (latestWithClips ? latestWithClips.id : latestSnapshot?.id || '')}
                   onChange={(e) => setVarBaseSnapshotId(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
                 >
-                  {project.snapshots.map((s) => (
+                  {[...project.snapshots].reverse().map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.message} ({s.id.slice(0, 8)})
+                      {s.message} ({s.timeline.clips.length} clip{s.timeline.clips.length !== 1 ? 's' : ''} • {s.id.slice(0, 8)})
                     </option>
                   ))}
                 </select>
@@ -449,6 +559,7 @@ export default function CollaboratorPage() {
             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider shrink-0">
               Variations:
             </span>
+
             {project.variations.length === 0 ? (
               <span className="text-xs text-slate-500 italic">No variations created yet</span>
             ) : (
@@ -478,30 +589,51 @@ export default function CollaboratorPage() {
                 );
               })
             )}
+
+            <button
+              type="button"
+              onClick={() => setIsCreatingVariation(true)}
+              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition shrink-0"
+              title="Create another variation branch"
+            >
+              + New Variation
+            </button>
           </div>
 
-          {activeVariation && (
-            <div className="flex items-center space-x-2 shrink-0">
-              {activeVariation.status === 'combined' ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-950 text-purple-300 border border-purple-800">
-                  <span>✓</span> Combined into Master Timeline
-                </span>
-              ) : activeVariation.status === 'in-review' ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  In Review with Lead
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsSubmittingReview(!isSubmittingReview)}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
-                >
-                  <span>Submit for Review &rarr;</span>
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex items-center space-x-2 shrink-0">
+            {activeVariation && (
+              <div className="flex items-center space-x-2">
+                {activeVariation.status === 'combined' ? (
+                  <div className="flex items-center space-x-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-950 text-purple-300 border border-purple-800">
+                      <span>✓</span> Merged into Master
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleReopenVariation}
+                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1"
+                      title="Unlock this variation to make more edits and submit another review"
+                    >
+                      <span>✏ Edit / Re-open</span>
+                    </button>
+                  </div>
+                ) : activeVariation.status === 'in-review' ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    In Review with Lead
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSubmittingReview(!isSubmittingReview)}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+                  >
+                    <span>Submit for Review &rarr;</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Change Request Banner if Lead requested changes */}
@@ -561,15 +693,17 @@ export default function CollaboratorPage() {
           </form>
         )}
 
-        {/* Banner: Main published new snapshot(s) */}
-        {hasMainChanges && activeVariation && latestSnapshot && (
+        {/* Banner: Lead has pushed new cut to Main */}
+        {isBaseSnapshotOutdated && activeVariation && (
           <div className="p-4 bg-indigo-950/40 border border-indigo-700/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-lg">
             <div className="space-y-1">
               <div className="flex items-center gap-2 font-bold text-indigo-300">
-                <span className="text-sm">📢 Lead Published New Cut on Main</span>
-                <span className="text-[10px] bg-indigo-900 text-indigo-200 border border-indigo-700/60 px-2 py-0.5 rounded-full font-mono">
-                  &ldquo;{latestSnapshot.message}&rdquo;
-                </span>
+                <span className="text-sm">📢 Lead Pushed New Cut to Main: &quot;{latestSnapshot?.message || 'Update'}&quot;</span>
+                {trimmedClipsOnMain.length > 0 && (
+                  <span className="text-[10px] bg-amber-900/80 text-amber-200 border border-amber-700/60 px-2 py-0.5 rounded-full font-mono">
+                    {trimmedClipsOnMain.length} clip{trimmedClipsOnMain.length !== 1 ? 's' : ''} trimmed/moved
+                  </span>
+                )}
                 {deletedOnMain.length > 0 && (
                   <span className="text-[10px] bg-rose-900/80 text-rose-200 border border-rose-700/60 px-2 py-0.5 rounded-full font-mono">
                     {deletedOnMain.length} clip{deletedOnMain.length !== 1 ? 's' : ''} deleted
@@ -582,8 +716,7 @@ export default function CollaboratorPage() {
                 )}
               </div>
               <p className="text-slate-300 text-xs">
-                Main moved to Snapshot <span className="font-mono text-indigo-300">{latestSnapshot.id.slice(0, 10)}</span> ({latestSnapshot.author}).
-                Your branch is isolated so your work isn&apos;t disrupted. Click <strong>Sync from Main</strong> to rebase Lead&apos;s published updates into this variation.
+                The Lead Editor pushed new changes to Main. Click <strong>↻ Sync from Main</strong> to rebase trims into this variation, or <strong>Reset to Main</strong> to match 100%.
               </p>
             </div>
 
@@ -592,7 +725,7 @@ export default function CollaboratorPage() {
                 type="button"
                 onClick={handleSyncWithMain}
                 className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-xs transition shadow flex items-center gap-1.5"
-                title="Pull Lead's latest published snapshot into this variation"
+                title="Pull Lead's latest trims and updates into this variation"
               >
                 <span>↻ Sync from Main (Rebase)</span>
               </button>
@@ -608,7 +741,7 @@ export default function CollaboratorPage() {
           </div>
         )}
 
-        {/* Variation Preview Player & Timeline */}
+        {/* Variation Timeline & Player */}
         {activeVariation ? (
           <section className="space-y-4">
             <div className="space-y-2">
@@ -633,11 +766,11 @@ export default function CollaboratorPage() {
               <TimelineView
                 timeline={activeVariation.timeline}
                 mediaList={project.media}
-                editable={activeVariation.status !== 'combined'}
+                editable={true}
                 onUpdateTimeline={handleUpdateVariationTimeline}
                 time={playerTime}
                 onTime={setPlayerTime}
-                title={`Variation Timeline (${activeVariation.status})`}
+                title={`Variation Timeline: ${activeVariation.name}${activeVariation.status === 'combined' ? ' (Merged — Editable)' : ''}`}
               />
             </div>
 
@@ -676,6 +809,7 @@ export default function CollaboratorPage() {
             mediaItems={project.media}
             onMediaAdded={handleMediaAdded}
             onBuildTimeline={handleAutoBuildTimeline}
+            onAddMediaToTimeline={handleAddMediaToTimeline}
           />
         </section>
       </main>

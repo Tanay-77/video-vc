@@ -28,10 +28,7 @@ export function buildTimeline(items: MediaItem[]): Timeline {
 
   for (const item of items) {
     const isAudio = isAudioMedia(item);
-    const clipId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `clip_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const clipId = `clip_${item.id}_${clips.length}`;
 
     if (isAudio) {
       clips.push({

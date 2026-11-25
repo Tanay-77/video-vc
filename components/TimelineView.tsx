@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Clip, MediaItem, Timeline, TrackType } from '../lib/types';
+import { hasTrackOverlaps, preventOverlaps } from '../lib/vc';
 
 interface TimelineViewProps {
   timeline: Timeline;
@@ -69,7 +70,7 @@ export function TimelineView({
   const [newName, setNewName] = useState<string>('New Clip');
   const [newMediaId, setNewMediaId] = useState<string>('');
   const [newStart, setNewStart] = useState<number>(0);
-  const [newDur, setNewDur] = useState<number>(3);
+  const [newDur, setNewDur] = useState<number>(5);
   const [newSpeed, setNewSpeed] = useState<number>(1.0);
 
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -97,10 +98,18 @@ export function TimelineView({
   // Helper to commit a timeline change with undo history
   const commitTimelineChange = useCallback((newTimeline: Timeline) => {
     if (!onUpdateTimeline) return;
+    const sanitized = preventOverlaps(newTimeline);
     setUndoStack((prev) => [...prev.slice(-30), JSON.parse(JSON.stringify(timeline))]);
     setRedoStack([]);
-    onUpdateTimeline(newTimeline);
+    onUpdateTimeline(sanitized);
   }, [onUpdateTimeline, timeline]);
+
+  // Auto-untangle any overlapping clips on the timeline
+  useEffect(() => {
+    if (hasTrackOverlaps(timeline) && editable && onUpdateTimeline) {
+      onUpdateTimeline(preventOverlaps(timeline));
+    }
+  }, [timeline, editable, onUpdateTimeline]);
 
   const handleUndo = useCallback(() => {
     if (!editable || !onUpdateTimeline || undoStack.length === 0) return;
@@ -205,17 +214,50 @@ export function TimelineView({
     setSelectedClipId(duplicateClip.id);
   }, [editable, onUpdateTimeline, selectedClip, timeline.clips, commitTimelineChange]);
 
-  // Close gaps between clips on V1
+  // Ripple Delete selected clip (removes clip and pulls subsequent clips backward to close the gap)
+  const handleRippleDeleteSelectedClip = useCallback(() => {
+    if (!editable || !onUpdateTimeline || !selectedClip) return;
+    const deletedTrack = selectedClip.track;
+    const deletedStart = selectedClip.start;
+    const deletedDur = selectedClip.dur;
+
+    const remaining = timeline.clips
+      .filter((c) => c.id !== selectedClip.id)
+      .map((c) => {
+        if (c.track === deletedTrack && c.start >= deletedStart + deletedDur) {
+          return {
+            ...c,
+            start: parseFloat(Math.max(0, c.start - deletedDur).toFixed(2)),
+          };
+        }
+        return c;
+      });
+
+    commitTimelineChange({ clips: remaining });
+    setSelectedClipId(null);
+  }, [editable, onUpdateTimeline, selectedClip, timeline.clips, commitTimelineChange]);
+
+  // Close gaps between clips on V1 and snap leading clips to 0s
   const handleCloseGaps = useCallback(() => {
     if (!editable || !onUpdateTimeline) return;
     const v1Clips = [...timeline.clips.filter((c) => c.track === 'V1')].sort((a, b) => a.start - b.start);
+    if (v1Clips.length === 0) return;
+
+    const leadingGap = v1Clips[0].start;
     let curStart = 0;
     const updatedV1 = v1Clips.map((c) => {
-      const res = { ...c, start: curStart };
+      const res = { ...c, start: parseFloat(curStart.toFixed(2)) };
       curStart += c.dur;
       return res;
     });
-    const nonV1 = timeline.clips.filter((c) => c.track !== 'V1');
+
+    const nonV1 = timeline.clips.filter((c) => c.track !== 'V1').map((c) => {
+      if (leadingGap > 0 && c.start >= leadingGap) {
+        return { ...c, start: parseFloat(Math.max(0, c.start - leadingGap).toFixed(2)) };
+      }
+      return c;
+    });
+
     commitTimelineChange({ clips: [...updatedV1, ...nonV1] });
   }, [editable, onUpdateTimeline, timeline.clips, commitTimelineChange]);
 
@@ -268,10 +310,14 @@ export function TimelineView({
         return;
       }
 
-      // Delete: Delete or Backspace
+      // Delete: Delete or Backspace (Shift+Del for ripple delete)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        handleDeleteSelectedClip();
+        if (e.shiftKey) {
+          handleRippleDeleteSelectedClip();
+        } else {
+          handleDeleteSelectedClip();
+        }
         return;
       }
 
@@ -465,7 +511,8 @@ export function TimelineView({
             }
             return c;
           });
-          commitTimelineChange({ clips: updatedClips });
+          const nonOverlapping = preventOverlaps({ clips: updatedClips }, dragState.clipId);
+          commitTimelineChange(nonOverlapping);
         }
 
         setDragState(null);
@@ -491,23 +538,72 @@ export function TimelineView({
     commitTimelineChange({ clips: updatedClips });
   };
 
+  const handleOpenAddClip = () => {
+    if (!isAddingClip) {
+      // Find a media item to preselect
+      const availableMedia = mediaList.length > 0 ? mediaList[0] : null;
+
+      // Smart placement: at the end of the selected track so clips never overlap
+      const trackClips = timeline.clips.filter((c) => c.track === newTrack);
+      const endOfTrack = trackClips.length > 0
+        ? Math.max(...trackClips.map((c) => c.start + c.dur))
+        : 0;
+      setNewStart(parseFloat(endOfTrack.toFixed(2)));
+
+      if (availableMedia) {
+        setNewMediaId(availableMedia.id);
+        setNewName(availableMedia.name);
+        setNewDur(parseFloat(availableMedia.duration.toFixed(2)));
+        const isAudio = availableMedia.name.toLowerCase().match(/\.(mp3|wav|ogg|m4a|aac|flac)$/);
+        if (isAudio) setNewTrack('A1');
+      } else {
+        setNewMediaId('');
+        setNewName('New Clip');
+        setNewDur(5);
+      }
+    }
+    setIsAddingClip(!isAddingClip);
+  };
+
   const handleAddClip = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editable || !onUpdateTimeline) return;
 
+    const selectedMedia = mediaList.find((m) => m.id === newMediaId);
+    // Directly use full media duration, no duration prompt
+    const fullDur = selectedMedia ? selectedMedia.duration : 5.0;
+    const validDur = Math.max(0.1, fullDur);
+
+    const trackClips = timeline.clips.filter((c) => c.track === newTrack);
+    const endOfTrack = trackClips.length > 0
+      ? Math.max(...trackClips.map((c) => c.start + c.dur))
+      : 0;
+
+    // Check if newStart overlaps an existing clip on this track
+    let targetStart = Math.max(0, Number(newStart) || 0);
+    const hasCollision = trackClips.some((c) => {
+      const clipEnd = c.start + c.dur;
+      return targetStart < clipEnd && c.start < targetStart + validDur;
+    });
+
+    if (hasCollision) {
+      targetStart = parseFloat(endOfTrack.toFixed(2));
+    }
+
     const newClip: Clip = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
       track: newTrack,
-      name: newName.trim() || 'Untitled Clip',
+      name: newName.trim() || (selectedMedia ? selectedMedia.name : 'Untitled Clip'),
       mediaId: newMediaId || null,
-      start: Math.max(0, Number(newStart) || 0),
-      dur: Math.max(0.5, Number(newDur) || 1),
+      start: targetStart,
+      dur: validDur,
       sourceIn: 0,
-      sourceOut: Math.max(0.5, Number(newDur) || 1),
+      sourceOut: validDur,
       speed: Number(newSpeed) || 1.0,
     };
 
-    commitTimelineChange({ clips: [...timeline.clips, newClip] });
+    const nonOverlapping = preventOverlaps({ clips: [...timeline.clips, newClip] }, newClip.id);
+    commitTimelineChange(nonOverlapping);
     setIsAddingClip(false);
     setSelectedClipId(newClip.id);
   };
@@ -650,17 +746,26 @@ export function TimelineView({
             </button>
           )}
 
-          {/* Delete clip button */}
+          {/* Delete clip buttons */}
           {editable && selectedClip && (
-            <button
-              type="button"
-              onClick={handleDeleteSelectedClip}
-              className="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 text-xs font-medium rounded-lg transition flex items-center gap-1"
-              title="Delete selected clip (Delete / Backspace)"
-            >
-              <span>🗑</span>
-              <span>Delete</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleDeleteSelectedClip}
+                className="px-2 py-1 bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 text-xs font-medium rounded-lg transition flex items-center gap-1"
+                title="Lift Delete: removes clip and leaves blank gap (Delete / Backspace)"
+              >
+                <span>🗑 Lift</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleRippleDeleteSelectedClip}
+                className="px-2 py-1 bg-amber-950/70 hover:bg-amber-900 border border-amber-800/80 text-amber-300 text-xs font-medium rounded-lg transition flex items-center gap-1"
+                title="Ripple Delete: removes clip and ripples following clips to close gap (Shift+Delete)"
+              >
+                <span>⇤ Ripple Del</span>
+              </button>
+            </div>
           )}
 
           {/* Close gaps button */}
@@ -672,6 +777,19 @@ export function TimelineView({
               title="Snap all V1 video clips one after another with no empty gaps"
             >
               Close Gaps
+            </button>
+          )}
+
+          {/* Fix Overlaps button if any overlap exists */}
+          {editable && hasTrackOverlaps(timeline) && (
+            <button
+              type="button"
+              onClick={() => commitTimelineChange(preventOverlaps(timeline))}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition shadow animate-pulse flex items-center gap-1"
+              title="Fix overlapping clips on all tracks and arrange them sequentially"
+            >
+              <span>⚠</span>
+              <span>Fix Overlaps</span>
             </button>
           )}
 
@@ -708,7 +826,7 @@ export function TimelineView({
           {editable && onUpdateTimeline && (
             <button
               type="button"
-              onClick={() => setIsAddingClip(!isAddingClip)}
+              onClick={handleOpenAddClip}
               className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition shadow-sm"
             >
               {isAddingClip ? 'Cancel' : '+ Add Clip'}
@@ -727,7 +845,19 @@ export function TimelineView({
               <span className="truncate">[{activeVideoClip.track}] {activeVideoClip.name}</span>
             </span>
           ) : (
-            <span className="text-slate-600 italic">Black frame (gap) at {currentTime.toFixed(1)}s</span>
+            <span className="inline-flex items-center gap-2 text-slate-500 italic">
+              <span>Black frame (gap) at {currentTime.toFixed(1)}s</span>
+              {editable && timeline.clips.some((c) => c.track === 'V1' && c.start > 0) && (
+                <button
+                  type="button"
+                  onClick={handleCloseGaps}
+                  className="not-italic text-[10px] font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded border border-slate-700 transition flex items-center gap-1 shadow-sm"
+                  title="Remove empty gap and snap clips to start at 0.0s"
+                >
+                  <span>⇤ Close Gap to 0s</span>
+                </button>
+              )}
+            </span>
           )}
 
           {activeAudioClip && (
@@ -783,7 +913,23 @@ export function TimelineView({
             <label className="block text-slate-400 mb-1">Source Media</label>
             <select
               value={newMediaId}
-              onChange={(e) => setNewMediaId(e.target.value)}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                setNewMediaId(selectedId);
+                const media = mediaList.find((m) => m.id === selectedId);
+                if (media) {
+                  setNewDur(parseFloat(media.duration.toFixed(2)));
+                  if (!newName || newName === 'New Clip' || newName === 'Untitled Clip' || mediaList.some((m) => m.name === newName)) {
+                    setNewName(media.name);
+                  }
+                  const isAudio = media.name.toLowerCase().match(/\.(mp3|wav|ogg|m4a|aac|flac)$/);
+                  if (isAudio && newTrack !== 'A1') {
+                    setNewTrack('A1');
+                  } else if (!isAudio && newTrack === 'A1') {
+                    setNewTrack('V1');
+                  }
+                }
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white"
             >
               <option value="">(None / Generator)</option>
@@ -807,24 +953,22 @@ export function TimelineView({
             />
           </div>
 
-          <div>
-            <label className="block text-slate-400 mb-1">Duration (s)</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0.2"
-              value={newDur}
-              onChange={(e) => setNewDur(parseFloat(e.target.value) || 1)}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white"
-            />
+          <div className="flex flex-col justify-center">
+            <span className="block text-slate-400 mb-1">Duration</span>
+            <div className="px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded text-slate-200 font-mono text-xs flex items-center justify-between">
+              <span>{mediaList.find((m) => m.id === newMediaId) ? `${mediaList.find((m) => m.id === newMediaId)?.duration.toFixed(1)}s` : '5.0s'}</span>
+              <span className="text-[10px] text-emerald-400 font-sans font-semibold">
+                {mediaList.find((m) => m.id === newMediaId) ? 'Full Media' : 'Generator'}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-end">
             <button
               type="submit"
-              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded transition"
+              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded transition shadow-sm"
             >
-              Save Clip
+              + Add Clip
             </button>
           </div>
         </form>

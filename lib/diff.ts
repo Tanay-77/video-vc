@@ -40,21 +40,43 @@ function isClose(a: number, b: number, tolerance = TIME_TOLERANCE): boolean {
  * In head only: 'added'
  */
 export function diffTimelines(base: Timeline, head: Timeline): DiffResult {
-  const baseMap = new Map<string, Clip>();
-  for (const c of base.clips) {
-    baseMap.set(c.id, c);
+  const baseClips = [...base.clips];
+  const headClips = [...head.clips];
+
+  // Matched pairs: headClip.id -> baseClip
+  const matchedBaseIds = new Set<string>();
+  const headToBase = new Map<string, Clip>();
+
+  // Pass 1: Exact ID matching
+  for (const h of headClips) {
+    const exact = baseClips.find((b) => !matchedBaseIds.has(b.id) && b.id === h.id);
+    if (exact) {
+      matchedBaseIds.add(exact.id);
+      headToBase.set(h.id, exact);
+    }
   }
 
-  const headMap = new Map<string, Clip>();
-  for (const c of head.clips) {
-    headMap.set(c.id, c);
+  // Pass 2: Smart matching for unmatched clips by mediaId + track (or name + track)
+  for (const h of headClips) {
+    if (!headToBase.has(h.id)) {
+      const match = baseClips.find(
+        (b) =>
+          !matchedBaseIds.has(b.id) &&
+          b.track === h.track &&
+          ((h.mediaId && b.mediaId && h.mediaId === b.mediaId) || b.name === h.name)
+      );
+      if (match) {
+        matchedBaseIds.add(match.id);
+        headToBase.set(h.id, match);
+      }
+    }
   }
 
   const items: ClipDiffItem[] = [];
 
-  // Check all clips in head (present or added)
-  for (const headClip of head.clips) {
-    const baseClip = baseMap.get(headClip.id);
+  // Check all clips in head (present, modified, or added)
+  for (const headClip of headClips) {
+    const baseClip = headToBase.get(headClip.id);
 
     if (!baseClip) {
       // Only in head: added
@@ -112,9 +134,9 @@ export function diffTimelines(base: Timeline, head: Timeline): DiffResult {
     }
   }
 
-  // Check clips only in base: removed
-  for (const baseClip of base.clips) {
-    if (!headMap.has(baseClip.id)) {
+  // Check clips only in base (that were not matched to any head clip): removed
+  for (const baseClip of baseClips) {
+    if (!matchedBaseIds.has(baseClip.id)) {
       items.push({
         clipId: baseClip.id,
         name: baseClip.name,

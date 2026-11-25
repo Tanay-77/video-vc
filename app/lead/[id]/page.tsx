@@ -12,6 +12,7 @@ import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, Snapshot, Timeline } from '@/lib/types';
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 import { diffTimelines } from '@/lib/diff';
+import { hasTrackOverlaps, preventOverlaps } from '@/lib/vc';
 
 export default function LeadEditorPage() {
   const params = useParams();
@@ -50,16 +51,16 @@ export default function LeadEditorPage() {
     draftDiff && (draftDiff.addedCount > 0 || draftDiff.modifiedCount > 0 || draftDiff.removedCount > 0)
   );
 
-  // Handler to update the active timeline (updates masterDraft only, keeping snapshots clean and unmutated)
+  // Handler to update the active timeline (updates masterDraft only, like uncommitted local edits in git)
   const handleUpdateActiveTimeline = useCallback((updatedTimeline: Timeline) => {
     setProject((prev) => {
       if (!prev) return prev;
-      if (prev.snapshots.length === 0) {
+      if (prev.snapshots.length === 0 || (prev.snapshots.length === 1 && prev.snapshots[0].timeline.clips.length === 0)) {
         const initialSnap: Snapshot = {
-          id: `snap_${Date.now()}`,
+          id: prev.snapshots[0]?.id || `snap_${Date.now()}`,
           parentId: null,
           author: snapshotAuthor || 'Lead Editor',
-          message: 'Initial cut',
+          message: 'Initial assembly cut',
           createdAt: new Date().toISOString(),
           timeline: updatedTimeline,
         };
@@ -127,6 +128,56 @@ export default function LeadEditorPage() {
     handleUpdateActiveTimeline(generatedTimeline);
     setPlayerTime(0);
   }, [handleUpdateActiveTimeline, project?.media]);
+
+  // Directly add a single media item with its full duration to the timeline (no duration prompt)
+  const handleAddMediaToTimeline = useCallback((item: MediaItem) => {
+    const isAudio =
+      item.name.toLowerCase().endsWith('.mp3') ||
+      item.name.toLowerCase().endsWith('.wav') ||
+      item.name.toLowerCase().endsWith('.m4a') ||
+      item.name.toLowerCase().endsWith('.aac') ||
+      item.name.toLowerCase().endsWith('.flac');
+
+    const targetTrack = isAudio ? 'A1' : 'V1';
+    const trackClips = activeTimeline.clips.filter((c) => c.track === targetTrack);
+    const endOfTrack = trackClips.length > 0
+      ? Math.max(...trackClips.map((c) => c.start + c.dur))
+      : 0;
+
+    // Check if playerTime falls inside an existing clip on this track
+    let startPos = parseFloat(endOfTrack.toFixed(2));
+    if (playerTime > 0) {
+      const isInside = trackClips.some((c) => playerTime >= c.start && playerTime < c.start + c.dur);
+      if (!isInside && playerTime >= endOfTrack) {
+        startPos = parseFloat(playerTime.toFixed(2));
+      }
+    }
+
+    const newClip: Clip = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `clip_${Date.now()}`,
+      track: targetTrack,
+      name: item.name,
+      mediaId: item.id,
+      start: startPos,
+      dur: item.duration,
+      sourceIn: 0,
+      sourceOut: item.duration,
+      speed: 1.0,
+    };
+
+    const resolved = preventOverlaps({
+      clips: [...activeTimeline.clips, newClip],
+    }, newClip.id);
+
+    handleUpdateActiveTimeline(resolved);
+  }, [activeTimeline, playerTime, handleUpdateActiveTimeline]);
+
+  // Auto-untangle any overlapping clips on the active master timeline
+  useEffect(() => {
+    if (activeTimeline && hasTrackOverlaps(activeTimeline)) {
+      handleUpdateActiveTimeline(preventOverlaps(activeTimeline));
+    }
+  }, [activeTimeline, handleUpdateActiveTimeline]);
 
   // If media items already exist in the project but the timeline is empty (e.g. from an earlier upload or page reload),
   // auto-build the timeline once so the clips immediately show up on screen!
@@ -494,9 +545,9 @@ export default function LeadEditorPage() {
                   type="button"
                   onClick={() => handlePublishDraft()}
                   className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded shadow-md transition flex items-center gap-1.5"
-                  title="Publish changes to Main so collaborators can sync"
+                  title="Push changes to Main (Snapshot) so collaborators can sync"
                 >
-                  <span>🚀 Publish Cut to Main</span>
+                  <span>🚀 Push Cut to Main</span>
                 </button>
               </div>
             )}
@@ -541,6 +592,7 @@ export default function LeadEditorPage() {
             mediaItems={project.media}
             onMediaAdded={handleMediaAdded}
             onBuildTimeline={handleAutoBuildTimeline}
+            onAddMediaToTimeline={handleAddMediaToTimeline}
           />
         </section>
 
@@ -568,7 +620,13 @@ export default function LeadEditorPage() {
             <div className="space-y-4">
               {project.reviews.map((rev) => {
                 const variation = project.variations.find((v) => v.id === rev.variationId);
-                const baseSnap = project.snapshots.find((s) => s.id === rev.baseSnapshotId) || latestSnapshot;
+                const baseSnap = project.snapshots.find((s) => s.id === rev.baseSnapshotId);
+                // If base snapshot had clips, compare against it; if it was empty (e.g. snap_init), compare against active Master cut
+                const effectiveBaseTimeline = (baseSnap && baseSnap.timeline.clips.length > 0)
+                  ? baseSnap.timeline
+                  : activeTimeline.clips.length > 0
+                    ? activeTimeline
+                    : latestSnapshot?.timeline || { clips: [] };
                 const isSelected = selectedReviewId === rev.id;
 
                 return (
@@ -673,10 +731,20 @@ export default function LeadEditorPage() {
                     )}
 
                     {/* Diff Preview when opened */}
-                    {isSelected && variation && baseSnap && (
+                    {isSelected && variation && (
                       <div className="mt-4 pt-3 border-t border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between text-xs pb-1">
+                          <span className="text-slate-400 font-medium">
+                            Comparing proposed changes against:
+                          </span>
+                          <span className="text-[11px] font-mono text-cyan-300 bg-slate-900 border border-slate-700 px-2 py-0.5 rounded">
+                            {baseSnap && baseSnap.timeline.clips.length > 0
+                              ? `Base Snapshot: ${baseSnap.message} (${baseSnap.id.slice(0, 8)})`
+                              : 'Current Master Timeline (HEAD)'}
+                          </span>
+                        </div>
                         <DiffViewer
-                          baseTimeline={baseSnap.timeline}
+                          baseTimeline={effectiveBaseTimeline}
                           variationTimeline={variation.timeline}
                         />
                         <div className="pt-2">

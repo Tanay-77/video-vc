@@ -365,5 +365,40 @@ describe('lib/diff.ts - Structural Timeline Diff Engine', () => {
       // Must have section for V2 showing addition
       expect(gitText).toMatch(/@@ V2 @@[\s\S]*\+ c1 "Intro Scene"/);
     });
+
+    it('matches clips by mediaId + track when clip IDs differ, recognizing trims instead of add/delete', () => {
+      const base: Timeline = {
+        clips: [
+          { id: 'master_c1', mediaId: 'm_waves', track: 'V1', name: 'waves.mp4', start: 0, dur: 6.3, sourceIn: 0, sourceOut: 6.3, speed: 1 },
+          { id: 'master_c2', mediaId: 'm_palm', track: 'V1', name: 'palm.mp4', start: 6.3, dur: 10.8, sourceIn: 0, sourceOut: 10.8, speed: 1 },
+          { id: 'master_c3', mediaId: 'm_clouds', track: 'V1', name: 'clouds.mp4', start: 17.1, dur: 18.1, sourceIn: 0, sourceOut: 18.1, speed: 1 },
+        ],
+      };
+
+      // Collaborator trimmed first clip (dur: 6.8s) but has different regenerated clip IDs
+      const head: Timeline = {
+        clips: [
+          { id: 'collab_c1', mediaId: 'm_waves', track: 'V1', name: 'waves.mp4', start: 0, dur: 6.8, sourceIn: 0, sourceOut: 6.8, speed: 1 },
+          { id: 'collab_c2', mediaId: 'm_palm', track: 'V1', name: 'palm.mp4', start: 6.8, dur: 10.8, sourceIn: 0, sourceOut: 10.8, speed: 1 },
+          { id: 'collab_c3', mediaId: 'm_clouds', track: 'V1', name: 'clouds.mp4', start: 17.6, dur: 18.1, sourceIn: 0, sourceOut: 18.1, speed: 1 },
+        ],
+      };
+
+      const diff = diffTimelines(base, head);
+
+      // Not 3 added clips!
+      expect(diff.addedCount).toBe(0);
+      expect(diff.removedCount).toBe(0);
+
+      // Clip 1 is trimmed!
+      const wavesDiff = diff.items.find((i) => i.name === 'waves.mp4')!;
+      expect(wavesDiff.status).toBe('modified');
+      expect(wavesDiff.flags).toContain('trimmed');
+
+      // Clips 2 and 3 are shifted (moved) because of the ripple/trim, but NOT added as new clips
+      const palmDiff = diff.items.find((i) => i.name === 'palm.mp4')!;
+      expect(palmDiff.status).toBe('modified');
+      expect(palmDiff.flags).toContain('moved');
+    });
   });
 });
