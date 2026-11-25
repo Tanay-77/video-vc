@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/Header';
@@ -34,6 +34,65 @@ export default function CollaboratorPage() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewMessage, setReviewMessage] = useState('');
 
+  const latestSnapshot = project && project.snapshots.length > 0
+    ? project.snapshots[project.snapshots.length - 1]
+    : null;
+
+  // Active variation: selected one or default to the first one available
+  const activeVariation =
+    project?.variations.find((v) => v.id === selectedVariationId) ||
+    project?.variations[0] ||
+    null;
+
+  // Associated review request if any
+  const currentReview = activeVariation
+    ? [...(project?.reviews || [])].reverse().find((r) => r.variationId === activeVariation.id)
+    : null;
+
+  // Base snapshot for this variation
+  const baseSnapshot = activeVariation
+    ? project?.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || latestSnapshot
+    : latestSnapshot;
+
+  // Handler to update the active variation timeline
+  const handleUpdateVariationTimeline = useCallback((updatedTimeline: Timeline) => {
+    if (!activeVariation) return;
+
+    setProject((prev) => {
+      if (!prev) return prev;
+      const updatedVariations = prev.variations.map((v) => {
+        if (v.id === activeVariation.id) {
+          return {
+            ...v,
+            timeline: updatedTimeline,
+            status: v.status === 'combined' ? v.status : ('editing' as const),
+          };
+        }
+        return v;
+      });
+
+      return {
+        ...prev,
+        variations: updatedVariations,
+      };
+    });
+  }, [activeVariation, setProject]);
+
+  // Auto-build timeline from uploaded media items
+  const handleAutoBuildTimeline = useCallback((items: MediaItem[]) => {
+    const mediaToBuild = items && items.length > 0 ? items : (project?.media || []);
+    const generatedTimeline = buildTimeline(mediaToBuild);
+    handleUpdateVariationTimeline(generatedTimeline);
+    setPlayerTime(0);
+  }, [handleUpdateVariationTimeline, project?.media]);
+
+  // If active variation has no clips yet but project has media, auto-populate the variation timeline
+  useEffect(() => {
+    if (activeVariation && activeVariation.timeline.clips.length === 0 && project && project.media.length > 0) {
+      handleAutoBuildTimeline(project.media);
+    }
+  }, [activeVariation, project, handleAutoBuildTimeline]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
@@ -64,26 +123,6 @@ export default function CollaboratorPage() {
       </div>
     );
   }
-
-  const latestSnapshot = project.snapshots.length > 0
-    ? project.snapshots[project.snapshots.length - 1]
-    : null;
-
-  // Active variation: selected one or default to the first one available
-  const activeVariation =
-    project.variations.find((v) => v.id === selectedVariationId) ||
-    project.variations[0] ||
-    null;
-
-  // Associated review request if any
-  const currentReview = activeVariation
-    ? [...project.reviews].reverse().find((r) => r.variationId === activeVariation.id)
-    : null;
-
-  // Base snapshot for this variation
-  const baseSnapshot = activeVariation
-    ? project.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || latestSnapshot
-    : latestSnapshot;
 
   // Handler to create a new variation
   const handleCreateVariation = (e: React.FormEvent) => {
@@ -118,38 +157,10 @@ export default function CollaboratorPage() {
     setIsCreatingVariation(false);
   };
 
-  // Handler to update the active variation timeline
-  const handleUpdateVariationTimeline = (updatedTimeline: Timeline) => {
-    if (!activeVariation) return;
-
-    const updatedVariations = project.variations.map((v) => {
-      if (v.id === activeVariation.id) {
-        return {
-          ...v,
-          timeline: updatedTimeline,
-          status: v.status === 'combined' ? v.status : ('editing' as const),
-        };
-      }
-      return v;
-    });
-
-    setProject({
-      ...project,
-      variations: updatedVariations,
-    });
-  };
-
   // 'Load sample project' button: loads 6 placeholder clips into this variation
   const handleLoadPlaceholderSample = () => {
     const placeholderTimeline = buildPlaceholderSampleTimeline();
     handleUpdateVariationTimeline(placeholderTimeline);
-    setPlayerTime(0);
-  };
-
-  // Auto-build timeline from uploaded media items
-  const handleAutoBuildTimeline = (items: MediaItem[]) => {
-    const generatedTimeline = buildTimeline(items);
-    handleUpdateVariationTimeline(generatedTimeline);
     setPlayerTime(0);
   };
 
@@ -168,26 +179,45 @@ export default function CollaboratorPage() {
       status: 'open',
     };
 
-    const updatedVariations = project.variations.map((v) =>
-      v.id === activeVariation.id ? { ...v, status: 'in-review' as const } : v
-    );
-
-    setProject({
-      ...project,
-      variations: updatedVariations,
-      reviews: [...project.reviews, newReview],
+    setProject((prev) => {
+      if (!prev) return prev;
+      const updatedVariations = prev.variations.map((v) =>
+        v.id === activeVariation.id ? { ...v, status: 'in-review' as const } : v
+      );
+      return {
+        ...prev,
+        variations: updatedVariations,
+        reviews: [...prev.reviews, newReview],
+      };
     });
 
     setReviewMessage('');
     setIsSubmittingReview(false);
   };
 
-  // Handler for media added
+  // Handler for media added — adds media AND sequences onto variation timeline
   const handleMediaAdded = (newItems: MediaItem[]) => {
-    setProject({
-      ...project,
-      media: [...project.media, ...newItems],
+    setProject((prev) => {
+      if (!prev) return prev;
+      const allMedia = [...prev.media, ...newItems];
+      const generatedTimeline = buildTimeline(allMedia);
+
+      let updatedVariations = [...prev.variations];
+      if (activeVariation) {
+        updatedVariations = updatedVariations.map((v) =>
+          v.id === activeVariation.id
+            ? { ...v, timeline: generatedTimeline, status: v.status === 'combined' ? v.status : ('editing' as const) }
+            : v
+        );
+      }
+
+      return {
+        ...prev,
+        media: allMedia,
+        variations: updatedVariations,
+      };
     });
+    setPlayerTime(0);
   };
 
   return (
@@ -319,21 +349,19 @@ export default function CollaboratorPage() {
                   <button
                     key={v.id}
                     onClick={() => setSelectedVariationId(v.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-2 shrink-0 ${
-                      isActive
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-600 shadow-sm'
-                        : 'bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800 hover:bg-slate-800'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-2 shrink-0 ${isActive
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-600 shadow-sm'
+                      : 'bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800 hover:bg-slate-800'
+                      }`}
                   >
                     <span>{v.name}</span>
                     <span
-                      className={`text-[9px] uppercase px-1.5 py-0.2 rounded-full font-bold ${
-                        v.status === 'combined'
-                          ? 'bg-purple-900 text-purple-200'
-                          : v.status === 'in-review'
+                      className={`text-[9px] uppercase px-1.5 py-0.2 rounded-full font-bold ${v.status === 'combined'
+                        ? 'bg-purple-900 text-purple-200'
+                        : v.status === 'in-review'
                           ? 'bg-amber-900 text-amber-200'
                           : 'bg-emerald-900 text-emerald-200'
-                      }`}
+                        }`}
                     >
                       {v.status}
                     </span>

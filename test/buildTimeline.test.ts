@@ -122,3 +122,4 @@ describe('lib/buildTimeline.ts', () => {
     expect(a1Count).toBe(2);
   });
 });
+

@@ -75,9 +75,14 @@ export function useProject(id: string) {
     };
   }, [id, reload]);
 
-  const updateProject = useCallback((updated: Project) => {
-    saveProject(updated);
-    setProjectState(updated);
+  const updateProject = useCallback((updater: Project | ((prev: Project | null) => Project | null)) => {
+    setProjectState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (next) {
+        saveProject(next);
+      }
+      return next;
+    });
   }, []);
 
   return { project, setProject: updateProject, reload, isLoading };

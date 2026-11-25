@@ -241,6 +241,7 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
         <video
           ref={videoRef}
           playsInline
+          preload="auto"
           className={`w-full h-full object-contain ${
             currentV1Clip && currentV1Clip.mediaId ? 'block' : 'hidden'
           }`}
@@ -359,3 +360,4 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
     </div>
   );
 }
+

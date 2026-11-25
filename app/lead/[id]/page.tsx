@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/Header';
@@ -30,6 +30,66 @@ export default function LeadEditorPage() {
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [requestChangeNote, setRequestChangeNote] = useState('');
   const [activeReviewAction, setActiveReviewAction] = useState<string | null>(null);
+
+  const latestSnapshot = project && project.snapshots.length > 0
+    ? project.snapshots[project.snapshots.length - 1]
+    : null;
+
+  // Active base timeline for lead is the latest snapshot timeline, or empty if none
+  const activeTimeline = latestSnapshot?.timeline || { clips: [] };
+
+  // Handler to update the active timeline (functional state update prevents stale closures)
+  const handleUpdateActiveTimeline = useCallback((updatedTimeline: Timeline) => {
+    setProject((prev) => {
+      if (!prev) return prev;
+      const currentLatest = prev.snapshots.length > 0
+        ? prev.snapshots[prev.snapshots.length - 1]
+        : null;
+
+      if (!currentLatest) {
+        const initialSnap: Snapshot = {
+          id: `snap_${Date.now()}`,
+          parentId: null,
+          author: snapshotAuthor || 'Lead Editor',
+          message: 'Initial cut',
+          createdAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+        };
+        return {
+          ...prev,
+          snapshots: [initialSnap],
+        };
+      }
+
+      const updatedSnapshots = [...prev.snapshots];
+      updatedSnapshots[updatedSnapshots.length - 1] = {
+        ...currentLatest,
+        timeline: updatedTimeline,
+      };
+
+      return {
+        ...prev,
+        snapshots: updatedSnapshots,
+      };
+    });
+  }, [setProject, snapshotAuthor]);
+
+  // Auto-build timeline from uploaded media items (videos on V1, audio on A1)
+  const handleAutoBuildTimeline = useCallback((items: MediaItem[]) => {
+    const mediaToBuild = items && items.length > 0 ? items : (project?.media || []);
+    const generatedTimeline = buildTimeline(mediaToBuild);
+    handleUpdateActiveTimeline(generatedTimeline);
+    setPlayerTime(0);
+  }, [handleUpdateActiveTimeline, project?.media]);
+
+  // If media items already exist in the project but the timeline is empty (e.g. from an earlier upload or page reload),
+  // auto-build the timeline once so the clips immediately show up on screen!
+  useEffect(() => {
+    if (project && project.media.length > 0 && activeTimeline.clips.length === 0) {
+      const generatedTimeline = buildTimeline(project.media);
+      handleUpdateActiveTimeline(generatedTimeline);
+    }
+  }, [project, activeTimeline.clips.length, handleUpdateActiveTimeline]);
 
   if (isLoading) {
     return (
@@ -62,54 +122,10 @@ export default function LeadEditorPage() {
     );
   }
 
-  const latestSnapshot = project.snapshots.length > 0
-    ? project.snapshots[project.snapshots.length - 1]
-    : null;
-
-  // Active base timeline for lead is the latest snapshot timeline, or empty if none
-  const activeTimeline = latestSnapshot?.timeline || { clips: [] };
-
-  // Handler to update the active timeline
-  const handleUpdateActiveTimeline = (updatedTimeline: Timeline) => {
-    if (!latestSnapshot) {
-      const initialSnap: Snapshot = {
-        id: `snap_${Date.now()}`,
-        parentId: null,
-        author: snapshotAuthor || 'Lead Editor',
-        message: 'Initial cut',
-        createdAt: new Date().toISOString(),
-        timeline: updatedTimeline,
-      };
-      setProject({
-        ...project,
-        snapshots: [initialSnap],
-      });
-      return;
-    }
-
-    const updatedSnapshots = [...project.snapshots];
-    updatedSnapshots[updatedSnapshots.length - 1] = {
-      ...latestSnapshot,
-      timeline: updatedTimeline,
-    };
-
-    setProject({
-      ...project,
-      snapshots: updatedSnapshots,
-    });
-  };
-
   // 'Load sample project' button: builds a timeline of 6 placeholder clips with no media (colored boxes only)
   const handleLoadPlaceholderSample = () => {
     const placeholderTimeline = buildPlaceholderSampleTimeline();
     handleUpdateActiveTimeline(placeholderTimeline);
-    setPlayerTime(0);
-  };
-
-  // Auto-build timeline from uploaded media items (videos on V1, audio on A1)
-  const handleAutoBuildTimeline = (items: MediaItem[]) => {
-    const generatedTimeline = buildTimeline(items);
-    handleUpdateActiveTimeline(generatedTimeline);
     setPlayerTime(0);
   };
 
@@ -130,21 +146,49 @@ export default function LeadEditorPage() {
       },
     };
 
-    setProject({
-      ...project,
-      snapshots: [...project.snapshots, newSnapshot],
+    setProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        snapshots: [...prev.snapshots, newSnapshot],
+      };
     });
 
     setSnapshotMsg('');
     setIsCreatingSnapshot(false);
   };
 
-  // Handler to add media items to project
+  // Handler to add media items to project AND auto-sequence them onto the timeline
   const handleMediaAdded = (newItems: MediaItem[]) => {
-    setProject({
-      ...project,
-      media: [...project.media, ...newItems],
+    setProject((prev) => {
+      if (!prev) return prev;
+      const allMedia = [...prev.media, ...newItems];
+      const generatedTimeline = buildTimeline(allMedia);
+
+      let updatedSnapshots = [...prev.snapshots];
+      if (updatedSnapshots.length === 0) {
+        updatedSnapshots = [{
+          id: `snap_${Date.now()}`,
+          parentId: null,
+          author: snapshotAuthor || 'Lead Editor',
+          message: 'Initial cut',
+          createdAt: new Date().toISOString(),
+          timeline: generatedTimeline,
+        }];
+      } else {
+        updatedSnapshots[updatedSnapshots.length - 1] = {
+          ...updatedSnapshots[updatedSnapshots.length - 1],
+          timeline: generatedTimeline,
+        };
+      }
+
+      return {
+        ...prev,
+        media: allMedia,
+        snapshots: updatedSnapshots,
+      };
     });
+    setPlayerTime(0);
   };
 
   // Handler to Combine / Merge Variation
@@ -386,13 +430,12 @@ export default function LeadEditorPage() {
                 return (
                   <div
                     key={rev.id}
-                    className={`rounded-xl border p-4 transition ${
-                      rev.status === 'open'
-                        ? 'bg-slate-950/90 border-amber-700/50 shadow-md'
-                        : rev.status === 'combined'
+                    className={`rounded-xl border p-4 transition ${rev.status === 'open'
+                      ? 'bg-slate-950/90 border-amber-700/50 shadow-md'
+                      : rev.status === 'combined'
                         ? 'bg-slate-950/40 border-emerald-800/40 opacity-80'
                         : 'bg-slate-950/40 border-slate-800'
-                    }`}
+                      }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                       <div className="space-y-1">
@@ -401,13 +444,12 @@ export default function LeadEditorPage() {
                             {variation?.name || 'Variation'}
                           </span>
                           <span
-                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                              rev.status === 'open'
-                                ? 'bg-amber-950 text-amber-300 border border-amber-700/60'
-                                : rev.status === 'combined'
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${rev.status === 'open'
+                              ? 'bg-amber-950 text-amber-300 border border-amber-700/60'
+                              : rev.status === 'combined'
                                 ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
                                 : 'bg-rose-950 text-rose-300 border border-rose-700/60'
-                            }`}
+                              }`}
                           >
                             {rev.status}
                           </span>
