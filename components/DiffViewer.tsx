@@ -1,156 +1,243 @@
 'use client';
 
-import React from 'react';
-import { Timeline, Clip } from '../lib/types';
+import React, { useState } from 'react';
+import { Timeline } from '../lib/types';
+import { diffTimelines, summarize, renderGitText } from '../lib/diff';
 
 interface DiffViewerProps {
   baseTimeline: Timeline;
   variationTimeline: Timeline;
 }
 
-interface ClipDiff {
+export interface LegacyClipDiff {
   type: 'added' | 'removed' | 'modified' | 'unchanged';
-  clip: Clip;
-  baseClip?: Clip;
+  clip: any;
+  baseClip?: any;
   changes?: string[];
 }
 
-export function computeTimelineDiff(base: Timeline, target: Timeline): ClipDiff[] {
-  const baseMap = new Map<string, Clip>(base.clips.map((c) => [c.id, c]));
-  const targetMap = new Map<string, Clip>(target.clips.map((c) => [c.id, c]));
-
-  const diffs: ClipDiff[] = [];
-
-  // Check clips in target
-  for (const clip of target.clips) {
-    const baseClip = baseMap.get(clip.id);
-    if (!baseClip) {
-      diffs.push({ type: 'added', clip });
-    } else {
-      const changes: string[] = [];
-      if (clip.track !== baseClip.track) changes.push(`Track: ${baseClip.track} → ${clip.track}`);
-      if (Math.abs(clip.start - baseClip.start) > 0.01) {
-        changes.push(`Start: ${baseClip.start.toFixed(1)}s → ${clip.start.toFixed(1)}s`);
+/**
+ * Backward-compatible helper for legacy test suite
+ */
+export function computeTimelineDiff(base: Timeline, target: Timeline): LegacyClipDiff[] {
+  const result = diffTimelines(base, target);
+  return result.items.map((item) => {
+    const changes: string[] = [];
+    if (item.status === 'modified' && item.before && item.after) {
+      if (item.before.track !== item.after.track) {
+        changes.push(`Track: ${item.before.track} → ${item.after.track}`);
       }
-      if (Math.abs(clip.dur - baseClip.dur) > 0.01) {
-        changes.push(`Duration: ${baseClip.dur.toFixed(1)}s → ${clip.dur.toFixed(1)}s`);
+      if (item.before.start !== item.after.start) {
+        changes.push(`Start: ${item.before.start}s → ${item.after.start}s`);
       }
-      if (clip.name !== baseClip.name) changes.push(`Name: "${baseClip.name}" → "${clip.name}"`);
-      if (Math.abs(clip.speed - baseClip.speed) > 0.01) {
-        changes.push(`Speed: ${baseClip.speed}x → ${clip.speed}x`);
-      }
-      if (
-        Math.abs(clip.sourceIn - baseClip.sourceIn) > 0.01 ||
-        Math.abs(clip.sourceOut - baseClip.sourceOut) > 0.01
-      ) {
-        changes.push(`Source: [${baseClip.sourceIn.toFixed(1)}s-${baseClip.sourceOut.toFixed(1)}s] → [${clip.sourceIn.toFixed(1)}s-${clip.sourceOut.toFixed(1)}s]`);
-      }
-
-      if (changes.length > 0) {
-        diffs.push({ type: 'modified', clip, baseClip, changes });
-      } else {
-        diffs.push({ type: 'unchanged', clip, baseClip });
+      if (item.before.dur !== item.after.dur) {
+        changes.push(`Duration: ${item.before.dur}s → ${item.after.dur}s`);
       }
     }
-  }
 
-  // Check removed clips
-  for (const clip of base.clips) {
-    if (!targetMap.has(clip.id)) {
-      diffs.push({ type: 'removed', clip });
-    }
-  }
-
-  return diffs;
+    return {
+      type: item.status,
+      clip: item.after || item.before,
+      baseClip: item.before || undefined,
+      changes: changes.length > 0 ? changes : undefined,
+    };
+  });
 }
 
 export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps) {
-  const diffs = computeTimelineDiff(baseTimeline, variationTimeline);
-  const added = diffs.filter((d) => d.type === 'added').length;
-  const removed = diffs.filter((d) => d.type === 'removed').length;
-  const modified = diffs.filter((d) => d.type === 'modified').length;
+  const [viewMode, setViewMode] = useState<'cards' | 'git'>('cards');
+  const diffResult = diffTimelines(baseTimeline, variationTimeline);
+  const summaryLines = summarize(diffResult);
+  const gitText = renderGitText(diffResult);
+
+  const { addedCount, removedCount, modifiedCount } = diffResult;
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs space-y-2">
+    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs space-y-3">
+      {/* Diff Header */}
       <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-[11px]">
-        <span className="font-semibold text-slate-300">Timeline Diff</span>
-        <div className="flex items-center space-x-2 font-mono">
-          <span className="text-emerald-400">+{added} added</span>
-          <span className="text-amber-400">~{modified} modified</span>
-          <span className="text-red-400">-{removed} removed</span>
+        <div className="flex items-center space-x-2">
+          <span className="font-semibold text-slate-300">Timeline Diff</span>
+          <div className="flex items-center space-x-1.5 font-mono text-[10px]">
+            <span className="text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/60">
+              +{addedCount} added
+            </span>
+            <span className="text-amber-400 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-800/60">
+              ~{modifiedCount} modified
+            </span>
+            <span className="text-rose-400 bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-800/60">
+              -{removedCount} removed
+            </span>
+          </div>
+        </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center bg-slate-900 rounded p-0.5 border border-slate-800 text-[10px]">
+          <button
+            type="button"
+            onClick={() => setViewMode('cards')}
+            className={`px-2 py-0.5 rounded transition ${
+              viewMode === 'cards' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Summary Cards
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('git')}
+            className={`px-2 py-0.5 rounded transition font-mono ${
+              viewMode === 'git' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Git Text Diff
+          </button>
         </div>
       </div>
 
-      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-        {diffs.map((d, idx) => {
-          if (d.type === 'added') {
-            return (
-              <div
-                key={`diff-${idx}`}
-                className="p-2 rounded bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-bold mr-1.5">[+ ADD]</span>
-                  <span className="font-semibold">{d.clip.name}</span>
-                  <span className="text-[10px] ml-2 text-emerald-400 font-mono">
-                    ({d.clip.track} &bull; {d.clip.start.toFixed(1)}s &ndash; {(d.clip.start + d.clip.dur).toFixed(1)}s)
-                  </span>
-                </div>
-                <span className="font-mono text-[10px]">{d.clip.dur.toFixed(1)}s</span>
-              </div>
-            );
-          }
+      {/* Summary Bullet Points */}
+      {summaryLines.length > 0 && summaryLines[0] !== 'No changes detected.' && (
+        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800 space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+            Change Summary (Biggest First):
+          </span>
+          {summaryLines.map((line, i) => (
+            <div key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5">
+              <span className="text-indigo-400 font-bold">&bull;</span>
+              <span>{line}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
-          if (d.type === 'removed') {
-            return (
-              <div
-                key={`diff-${idx}`}
-                className="p-2 rounded bg-red-950/40 border border-red-800/60 text-red-300 flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-bold mr-1.5">[- DEL]</span>
-                  <span className="font-semibold line-through">{d.clip.name}</span>
-                  <span className="text-[10px] ml-2 text-red-400 font-mono">
-                    ({d.clip.track} &bull; {d.clip.start.toFixed(1)}s)
-                  </span>
-                </div>
-                <span className="font-mono text-[10px]">{d.clip.dur.toFixed(1)}s</span>
-              </div>
-            );
-          }
-
-          if (d.type === 'modified') {
-            return (
-              <div
-                key={`diff-${idx}`}
-                className="p-2 rounded bg-amber-950/40 border border-amber-800/60 text-amber-300"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div>
-                    <span className="font-bold mr-1.5">[~ MOD]</span>
-                    <span className="font-semibold">{d.clip.name}</span>
-                    <span className="text-[10px] ml-2 text-amber-400 font-mono">({d.clip.track})</span>
+      {/* Mode 1: Cards View */}
+      {viewMode === 'cards' && (
+        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+          {diffResult.items
+            .filter((item) => item.status !== 'unchanged')
+            .map((d, idx) => {
+              if (d.status === 'added' && d.after) {
+                return (
+                  <div
+                    key={`diff-${idx}`}
+                    className="p-2 rounded bg-emerald-950/30 border border-emerald-800/50 text-emerald-300 flex items-center justify-between"
+                  >
+                    <div>
+                      <span className="font-bold mr-1.5 text-xs">[+ ADD]</span>
+                      <span className="font-semibold">{d.after.name}</span>
+                      <span className="text-[10px] ml-2 text-emerald-400 font-mono">
+                        ({d.after.track} &bull; {d.after.start.toFixed(1)}s &ndash; {(d.after.start + d.after.dur).toFixed(1)}s)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px]">{d.after.dur.toFixed(1)}s</span>
                   </div>
-                </div>
-                <div className="pl-4 text-[10px] text-amber-200/90 space-y-0.5 font-mono">
-                  {d.changes?.map((ch, i) => (
-                    <div key={i}>&bull; {ch}</div>
-                  ))}
-                </div>
-              </div>
-            );
-          }
+                );
+              }
 
-          return null; // Don't clutter with unchanged
-        })}
+              if (d.status === 'removed' && d.before) {
+                return (
+                  <div
+                    key={`diff-${idx}`}
+                    className="p-2 rounded bg-rose-950/30 border border-rose-800/50 text-rose-300 flex items-center justify-between"
+                  >
+                    <div>
+                      <span className="font-bold mr-1.5 text-xs">[- DEL]</span>
+                      <span className="font-semibold line-through">{d.before.name}</span>
+                      <span className="text-[10px] ml-2 text-rose-400 font-mono">
+                        ({d.before.track} &bull; {d.before.start.toFixed(1)}s)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px]">{d.before.dur.toFixed(1)}s</span>
+                  </div>
+                );
+              }
 
-        {added === 0 && removed === 0 && modified === 0 && (
-          <div className="text-center py-2 text-slate-500 text-[11px]">
-            No differences between base snapshot and variation.
-          </div>
-        )}
-      </div>
+              if (d.status === 'modified' && d.before && d.after) {
+                return (
+                  <div
+                    key={`diff-${idx}`}
+                    className="p-2 rounded bg-amber-950/30 border border-amber-800/50 text-amber-300 space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs">[~ MOD]</span>
+                        <span className="font-semibold">{d.after.name}</span>
+                        <span className="text-[10px] text-amber-400 font-mono">
+                          ({d.after.track})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] font-mono uppercase">
+                        {d.flags.map((flag) => (
+                          <span
+                            key={flag}
+                            className="px-1.5 py-0.2 rounded bg-amber-900/60 border border-amber-700/60 font-bold"
+                          >
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-amber-200/80 font-mono pl-4 space-y-0.5">
+                      {d.flags.includes('moved') && (
+                        <div>&bull; Position: {d.before.start.toFixed(1)}s &rarr; {d.after.start.toFixed(1)}s {d.before.track !== d.after.track ? `(Track: ${d.before.track} → ${d.after.track})` : ''}</div>
+                      )}
+                      {d.flags.includes('trimmed') && (
+                        <div>&bull; Duration: {d.before.dur.toFixed(1)}s &rarr; {d.after.dur.toFixed(1)}s (Source in/out: [{d.after.sourceIn.toFixed(1)}s - {d.after.sourceOut.toFixed(1)}s])</div>
+                      )}
+                      {d.flags.includes('retimed') && (
+                        <div>&bull; Speed: {d.before.speed}x &rarr; {d.after.speed}x</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })}
+
+          {addedCount === 0 && removedCount === 0 && modifiedCount === 0 && (
+            <div className="text-center py-4 text-slate-500 text-[11px] italic">
+              No differences between base snapshot and variation.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mode 2: Git Text Diff */}
+      {viewMode === 'git' && (
+        <div className="bg-slate-900 border border-slate-800 rounded p-3 font-mono text-[11px] overflow-x-auto max-h-56">
+          {gitText ? (
+            <pre className="text-slate-200 whitespace-pre leading-relaxed">
+              {gitText.split('\n').map((line, i) => {
+                const isHeader = line.startsWith('@@');
+                const isMinus = line.startsWith('-');
+                const isPlus = line.startsWith('+');
+
+                return (
+                  <div
+                    key={i}
+                    className={
+                      isHeader
+                        ? 'text-cyan-400 font-bold py-0.5'
+                        : isMinus
+                        ? 'text-rose-400 bg-rose-950/30 -mx-1 px-1'
+                        : isPlus
+                        ? 'text-emerald-400 bg-emerald-950/30 -mx-1 px-1'
+                        : 'text-slate-400'
+                    }
+                  >
+                    {line}
+                  </div>
+                );
+              })}
+            </pre>
+          ) : (
+            <div className="text-slate-500 text-center py-2 italic">
+              Empty diff (no changes)
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
