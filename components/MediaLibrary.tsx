@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { Plus, X, UploadCloud } from 'lucide-react';
 import { MediaItem, Clip, TrackType } from '../lib/types';
 import { saveMedia, getMediaUrl } from '../lib/media';
 
@@ -107,7 +108,8 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
               </>
             ) : (
               <>
-                <span>+ Upload Media</span>
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Upload Media</span>
               </>
             )}
           </button>
@@ -130,9 +132,10 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
                 if (previewUrl) URL.revokeObjectURL(previewUrl);
                 setPreviewUrl(null);
               }}
-              className="text-xs text-slate-400 hover:text-white"
+              className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
             >
-              ✕ Close
+              <X className="w-3.5 h-3.5" />
+              <span>Close</span>
             </button>
           </div>
           <video src={previewUrl} controls className="w-full max-h-56 rounded bg-black object-contain" />

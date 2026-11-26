@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Layers, FileText, LayoutList } from 'lucide-react';
 import { Timeline } from '../lib/types';
 import { diffTimelines, summarize, renderGitText } from '../lib/diff';
+import { GhostTimelineView } from './GhostTimelineView';
 
 interface DiffViewerProps {
   baseTimeline: Timeline;
@@ -45,7 +47,7 @@ export function computeTimelineDiff(base: Timeline, target: Timeline): LegacyCli
 }
 
 export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps) {
-  const [viewMode, setViewMode] = useState<'cards' | 'git'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'ghost' | 'git'>('cards');
   const diffResult = diffTimelines(baseTimeline, variationTimeline);
   const summaryLines = summarize(diffResult);
   const gitText = renderGitText(diffResult);
@@ -53,56 +55,68 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
   const { addedCount, removedCount, modifiedCount } = diffResult;
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs space-y-3">
+    <div className="bg-[#131317] border border-[#22222a] rounded-2xl p-4 text-xs space-y-3">
       {/* Diff Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-[11px]">
+      <div className="flex items-center justify-between pb-3 border-b border-[#22222a] text-[11px]">
         <div className="flex items-center space-x-2">
-          <span className="font-semibold text-slate-300">Timeline Diff</span>
+          <span className="font-semibold text-zinc-200">Timeline Diff</span>
           <div className="flex items-center space-x-1.5 font-mono text-[10px]">
-            <span className="text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/60">
+            <span className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/60">
               +{addedCount} added
             </span>
-            <span className="text-amber-400 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-800/60">
+            <span className="text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-800/60">
               ~{modifiedCount} modified
             </span>
-            <span className="text-rose-400 bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-800/60">
+            <span className="text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-800/60">
               -{removedCount} removed
             </span>
           </div>
         </div>
 
         {/* View mode toggle */}
-        <div className="flex items-center bg-slate-900 rounded p-0.5 border border-slate-800 text-[10px]">
+        <div className="flex items-center bg-[#0d0d10] rounded-full p-0.5 border border-[#22222a] text-[10px]">
           <button
             type="button"
             onClick={() => setViewMode('cards')}
-            className={`px-2 py-0.5 rounded transition ${
-              viewMode === 'cards' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            className={`px-3 py-1 rounded-full transition flex items-center gap-1 ${
+              viewMode === 'cards' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            Summary Cards
+            <LayoutList className="w-3 h-3" />
+            <span>Summary Cards</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('ghost')}
+            className={`px-3 py-1 rounded-full transition flex items-center gap-1 ${
+              viewMode === 'ghost' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            <span>Ghost Timeline</span>
           </button>
           <button
             type="button"
             onClick={() => setViewMode('git')}
-            className={`px-2 py-0.5 rounded transition font-mono ${
-              viewMode === 'git' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            className={`px-3 py-1 rounded-full transition font-mono flex items-center gap-1 ${
+              viewMode === 'git' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            Git Text Diff
+            <FileText className="w-3 h-3" />
+            <span>Git Text Diff</span>
           </button>
         </div>
       </div>
 
       {/* Summary Bullet Points */}
       {summaryLines.length > 0 && summaryLines[0] !== 'No changes detected.' && (
-        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800 space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+        <div className="p-3 bg-[#18181f] rounded-xl border border-[#262632] space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
             Change Summary (Biggest First):
           </span>
           {summaryLines.map((line, i) => (
-            <div key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-              <span className="text-indigo-400 font-bold">&bull;</span>
+            <div key={i} className="text-[11px] text-zinc-300 flex items-start gap-1.5">
+              <span className="text-[#0071e3] font-bold">&bull;</span>
               <span>{line}</span>
             </div>
           ))}
@@ -119,11 +133,11 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2 rounded bg-emerald-950/30 border border-emerald-800/50 text-emerald-300 flex items-center justify-between"
+                    className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-800/40 text-emerald-300 flex items-center justify-between"
                   >
                     <div>
                       <span className="font-bold mr-1.5 text-xs">[+ ADD]</span>
-                      <span className="font-semibold">{d.after.name}</span>
+                      <span className="font-semibold text-white">{d.after.name}</span>
                       <span className="text-[10px] ml-2 text-emerald-400 font-mono">
                         ({d.after.track} &bull; {d.after.start.toFixed(1)}s &ndash; {(d.after.start + d.after.dur).toFixed(1)}s)
                       </span>
@@ -137,11 +151,11 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2 rounded bg-rose-950/30 border border-rose-800/50 text-rose-300 flex items-center justify-between"
+                    className="p-2.5 rounded-xl bg-rose-950/25 border border-rose-800/40 text-rose-300 flex items-center justify-between"
                   >
                     <div>
                       <span className="font-bold mr-1.5 text-xs">[- DEL]</span>
-                      <span className="font-semibold line-through">{d.before.name}</span>
+                      <span className="font-semibold line-through text-zinc-300">{d.before.name}</span>
                       <span className="text-[10px] ml-2 text-rose-400 font-mono">
                         ({d.before.track} &bull; {d.before.start.toFixed(1)}s)
                       </span>
@@ -155,12 +169,12 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2 rounded bg-amber-950/30 border border-amber-800/50 text-amber-300 space-y-1"
+                    className="p-2.5 rounded-xl bg-amber-950/25 border border-amber-800/40 text-amber-300 space-y-1"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-xs">[~ MOD]</span>
-                        <span className="font-semibold">{d.after.name}</span>
+                        <span className="font-semibold text-white">{d.after.name}</span>
                         <span className="text-[10px] text-amber-400 font-mono">
                           ({d.after.track})
                         </span>
@@ -169,7 +183,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                         {d.flags.map((flag) => (
                           <span
                             key={flag}
-                            className="px-1.5 py-0.2 rounded bg-amber-900/60 border border-amber-700/60 font-bold"
+                            className="px-2 py-0.5 rounded-full bg-amber-900/60 border border-amber-700/60 font-bold"
                           >
                             {flag}
                           </span>
@@ -196,16 +210,26 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
             })}
 
           {addedCount === 0 && removedCount === 0 && modifiedCount === 0 && (
-            <div className="text-center py-4 text-slate-500 text-[11px] italic">
+            <div className="text-center py-4 text-zinc-500 text-[11px] italic">
               No differences between base snapshot and variation.
             </div>
           )}
         </div>
       )}
 
-      {/* Mode 2: Git Text Diff */}
+      {/* Mode 2: Ghost Timeline */}
+      {viewMode === 'ghost' && (
+        <div className="space-y-2">
+          <GhostTimelineView
+            baseTimeline={baseTimeline}
+            variationTimeline={variationTimeline}
+          />
+        </div>
+      )}
+
+      {/* Mode 3: Git Text Diff */}
       {viewMode === 'git' && (
-        <div className="bg-slate-900 border border-slate-800 rounded p-3 font-mono text-[11px] overflow-x-auto max-h-56">
+        <div className="bg-[#0d0d10] border border-[#22222a] rounded-xl p-3 font-mono text-[11px] overflow-x-auto max-h-56">
           {gitText ? (
             <pre className="text-slate-200 whitespace-pre leading-relaxed">
               {gitText.split('\n').map((line, i) => {

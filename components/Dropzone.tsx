@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { UploadCloud, Loader2, Plus, ArrowRight } from 'lucide-react';
 import { MediaItem } from '../lib/types';
 import { saveMedia, readMediaDuration } from '../lib/media';
 
@@ -99,16 +100,16 @@ export function Dropzone({
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg p-5 space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+    <div className="bg-[#131317] border border-[#22222a] rounded-2xl overflow-hidden shadow-xl p-5 space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <span>Clip Upload &amp; Media Bin</span>
-            <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-xs bg-[#1f1f28] text-zinc-300 border border-[#2a2a36] px-2.5 py-0.5 rounded-full font-mono">
               {mediaItems.length} item{mediaItems.length !== 1 ? 's' : ''}
             </span>
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-zinc-400">
             Accepts <strong>.mp4</strong>, <strong>.mp3</strong>, and <strong>.wav</strong>. Stored directly in IndexedDB.
           </p>
         </div>
@@ -117,7 +118,7 @@ export function Dropzone({
           <button
             type="button"
             onClick={() => onBuildTimeline(mediaItems)}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+            className="px-3.5 py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-medium rounded-full transition shadow-sm flex items-center gap-1.5"
             title="Auto-sequence video files onto V1 and audio onto A1"
           >
             <span>Auto-Build Timeline &rarr;</span>
@@ -143,41 +144,41 @@ export function Dropzone({
         onClick={() => fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
           isDragging
-            ? 'border-indigo-500 bg-indigo-950/30 text-indigo-300'
-            : 'border-slate-700 hover:border-slate-600 bg-slate-950/60 text-slate-400'
+            ? 'border-[#0071e3] bg-[#0071e3]/10 text-blue-300'
+            : 'border-[#282834] hover:border-[#3a3a4c] bg-[#0d0d10]/70 text-zinc-400'
         }`}
       >
         <div className="flex flex-col items-center justify-center space-y-2">
-          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 text-xl font-bold">
-            {isProcessing ? '⏳' : '📥'}
+          <div className="w-10 h-10 rounded-full bg-[#1a1a24] border border-[#282836] flex items-center justify-center text-zinc-300">
+            {isProcessing ? <Loader2 className="w-5 h-5 animate-spin text-[#0071e3]" /> : <UploadCloud className="w-5 h-5 text-zinc-300" />}
           </div>
-          <div className="text-xs sm:text-sm font-medium text-slate-200">
+          <div className="text-xs sm:text-sm font-medium text-zinc-200">
             {isProcessing ? (
               <span>Reading metadata &amp; saving to IndexedDB...</span>
             ) : (
               <span>Drag &amp; drop video (.mp4) and audio (.mp3, .wav) files here</span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500">
-            or <span className="text-indigo-400 underline">browse files from your device</span> (reads duration via loadedmetadata)
+          <p className="text-[11px] text-zinc-500">
+            or <span className="text-[#0071e3] hover:underline">browse files from your device</span> (reads duration via loadedmetadata)
           </p>
         </div>
       </div>
 
       {statusMessage && (
-        <div className="p-2.5 rounded bg-slate-950 border border-slate-800 text-xs text-indigo-300">
+        <div className="p-2.5 rounded-lg bg-[#0e0e12] border border-[#242430] text-xs text-blue-300">
           {statusMessage}
         </div>
       )}
 
       {/* Media Bin List */}
       <div className="space-y-2 pt-2">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
           Media Bin ({mediaItems.length})
         </span>
 
         {mediaItems.length === 0 ? (
-          <div className="text-center py-6 text-slate-500 text-xs italic bg-slate-950/40 rounded-lg border border-slate-800/60">
+          <div className="text-center py-6 text-zinc-500 text-xs italic bg-[#0e0e12] rounded-xl border border-[#22222a]">
             Media bin is empty. Drop .mp4, .mp3 or .wav files above.
           </div>
         ) : (
@@ -190,39 +191,39 @@ export function Dropzone({
               return (
                 <div
                   key={item.id}
-                  className="p-3 bg-slate-950 rounded-lg border border-slate-800/80 flex flex-col justify-between space-y-2 hover:border-slate-700 transition"
+                  className="p-3 bg-[#18181f] rounded-xl border border-[#242430] flex flex-col justify-between space-y-2 hover:border-[#363646] transition"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center space-x-1.5 truncate">
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
                           isAudio
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                            : 'bg-blue-950 text-blue-300 border border-blue-800/80'
+                            ? 'bg-sky-950/70 text-sky-300 border border-sky-600/60'
+                            : 'bg-emerald-950/70 text-emerald-300 border border-emerald-600/60'
                         }`}
                       >
                         {isAudio ? 'A1 Audio' : 'V1 Video'}
                       </span>
-                      <span className="font-medium text-slate-200 text-xs truncate" title={item.name}>
+                      <span className="font-medium text-zinc-200 text-xs truncate" title={item.name}>
                         {item.name}
                       </span>
                     </div>
-                    <span className="text-xs font-mono text-slate-300 shrink-0">
+                    <span className="text-xs font-mono text-zinc-300 shrink-0">
                       {item.duration.toFixed(1)}s
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-900">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono pt-1 border-t border-[#22222c]">
                     <div className="flex items-center gap-2">
                       <span>{formatSize(item.size)}</span>
-                      <span className="text-slate-600 text-[10px]">id: {item.id.slice(0, 8)}</span>
+                      <span className="text-zinc-600 text-[10px]">id: {item.id.slice(0, 8)}</span>
                     </div>
 
                     {onAddMediaToTimeline && (
                       <button
                         type="button"
                         onClick={() => onAddMediaToTimeline(item)}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-semibold transition flex items-center gap-1 shadow-sm shrink-0"
+                        className="px-2.5 py-1 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg text-[11px] font-medium transition flex items-center gap-1 shadow-sm shrink-0"
                         title={`Directly add "${item.name}" (${item.duration.toFixed(1)}s) to timeline with full duration`}
                       >
                         <span>+ Add to Timeline</span>

@@ -415,7 +415,11 @@ export function combine(project: Project, reviewId: string): CombineResult {
 
   const updatedVariations = project.variations.map((v) => {
     if (v.id === variation.id) {
-      return { ...deepClone(v), status: 'combined' as const };
+      return {
+        ...deepClone(v),
+        status: 'combined' as const,
+        baseSnapshotId: combinedSnapshot.id,
+      };
     }
     return deepClone(v);
   });

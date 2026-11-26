@@ -22,16 +22,7 @@ export function createPlaceholderSampleProject(): Project {
         timeline,
       },
     ],
-    variations: [
-      {
-        id: 'var-placeholder-cut',
-        name: 'Overlay Cut Variation',
-        author: 'Jordan (Collaborator)',
-        baseSnapshotId: 'snap-placeholder-initial',
-        status: 'editing',
-        timeline: JSON.parse(JSON.stringify(timeline)),
-      },
-    ],
+    variations: [],
     reviews: [],
   };
 }

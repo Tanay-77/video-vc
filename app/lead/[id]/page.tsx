@@ -13,6 +13,7 @@ import { Clip, MediaItem, Snapshot, Timeline } from '@/lib/types';
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 import { diffTimelines } from '@/lib/diff';
 import { hasTrackOverlaps, preventOverlaps } from '@/lib/vc';
+import { Sparkles, Upload, Plus, ExternalLink, X, FileSearch } from 'lucide-react';
 
 export default function LeadEditorPage() {
   const params = useParams();
@@ -190,9 +191,9 @@ export default function LeadEditorPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-[#0a0a0d] flex items-center justify-center text-zinc-400">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-4 h-4 border-2 border-[#5856d6] border-t-transparent rounded-full animate-spin"></div>
           <span>Loading project...</span>
         </div>
       </div>
@@ -201,16 +202,16 @@ export default function LeadEditorPage() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="min-h-screen bg-[#0a0a0d] text-zinc-100">
         <Header role="Lead editor" />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
           <h2 className="text-xl font-bold text-white">Project Not Found</h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-zinc-400">
             Could not find a project with ID &quot;{projectId}&quot; in local storage.
           </p>
           <Link
             href="/"
-            className="inline-block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold transition"
+            className="inline-block px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-full text-sm font-medium transition"
           >
             &larr; Return to Home
           </Link>
@@ -291,7 +292,7 @@ export default function LeadEditorPage() {
     );
 
     const updatedVariations = project.variations.map((v) =>
-      v.id === variation.id ? { ...v, status: 'combined' as const } : v
+      v.id === variation.id ? { ...v, status: 'combined' as const, baseSnapshotId: mergeSnapshot.id } : v
     );
 
     setProject({
@@ -332,21 +333,21 @@ export default function LeadEditorPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0d] text-zinc-100">
       <Header projectId={project.id} projectName={project.name} role="Lead editor" />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 space-y-6">
         {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131317] border border-[#22222a] rounded-2xl p-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white">{project.name}</h1>
-              <span className="text-xs bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded font-mono">
+              <span className="text-xs bg-[#5856d6]/20 text-[#a371f7] border border-[#5856d6]/40 px-2.5 py-0.5 rounded-full font-mono">
                 Project Lead Control
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Active Head: <span className="font-mono text-slate-300">{latestSnapshot?.id || 'none'}</span> &bull;{' '}
+            <p className="text-xs text-zinc-400 mt-1">
+              Active Head: <span className="font-mono text-zinc-300">{latestSnapshot?.id || 'none'}</span> &bull;{' '}
               {latestSnapshot?.message || 'No snapshot'}
             </p>
           </div>
@@ -356,38 +357,42 @@ export default function LeadEditorPage() {
             <button
               type="button"
               onClick={handleLoadPlaceholderSample}
-              className="px-3 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-xs font-semibold rounded-lg transition border border-purple-700/60 shadow-sm flex items-center gap-1.5"
+              className="px-3.5 py-1.5 bg-[#6e40c9]/20 hover:bg-[#6e40c9]/30 text-[#a371f7] text-xs font-medium rounded-full transition border border-[#6e40c9]/40 shadow-sm flex items-center gap-1.5"
               title="Build a timeline of 6 placeholder clips with no media (colored boxes only)"
             >
-              <span>★ Load 6-Clip Sample</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Load 6-Clip Sample</span>
             </button>
 
             {hasDraftChanges ? (
               <button
                 type="button"
                 onClick={() => handlePublishDraft()}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition shadow-md flex items-center gap-1.5 animate-pulse"
+                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold rounded-full transition shadow-md flex items-center gap-1.5"
                 title="Publish your current working draft to Main so collaborators can sync"
               >
-                <span>🚀 Publish Cut to Main</span>
+                <Upload className="w-3.5 h-3.5" />
+                <span>Publish Cut to Main</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-medium rounded-full transition shadow-sm flex items-center gap-1.5"
               >
-                <span>+ Create Snapshot (Commit)</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Snapshot (Commit)</span>
               </button>
             )}
 
             <Link
-              href={`/join/${project.id}`}
+              href={`/join/${project.id}${project.variations.length === 0 ? '?new=1' : ''}`}
               target="_blank"
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-1.5"
-              title="Open Collaborator view in a new tab to test live BroadcastChannel sync"
+              className="px-3.5 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-200 text-xs font-medium rounded-full transition border border-[#2a2a36] flex items-center gap-1.5"
+              title="Open Collaborator view in a new tab to create or edit variation branches"
             >
-              <span>Open Collaborator in New Tab &#8599;</span>
+              <span>Open Collaborator in New Tab</span>
+              <ExternalLink className="w-3 h-3 text-zinc-400" />
             </Link>
           </div>
         </div>
@@ -396,44 +401,45 @@ export default function LeadEditorPage() {
         {isCreatingSnapshot && (
           <form
             onSubmit={handleCreateSnapshot}
-            className="p-4 bg-slate-900 border border-indigo-700/60 rounded-xl space-y-3 text-xs"
+            className="p-4 bg-[#131317] border border-[#5856d6]/40 rounded-2xl space-y-3 text-xs"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-semibold text-indigo-300">New Snapshot (Commit)</span>
+            <div className="flex items-center justify-between border-b border-[#22222a] pb-2">
+              <span className="font-semibold text-[#a371f7]">New Snapshot (Commit)</span>
               <button
                 type="button"
                 onClick={() => setIsCreatingSnapshot(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-zinc-400 hover:text-white flex items-center gap-1"
               >
-                ✕ Cancel
+                <X className="w-3.5 h-3.5" />
+                <span>Cancel</span>
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Author Name</label>
+                <label className="block text-zinc-400 mb-1">Author Name</label>
                 <input
                   type="text"
                   value={snapshotAuthor}
                   onChange={(e) => setSnapshotAuthor(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#0071e3]"
                   required
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Snapshot Message / Changelog</label>
+                <label className="block text-zinc-400 mb-1">Snapshot Message / Changelog</label>
                 <input
                   type="text"
                   placeholder="e.g. Cut opening drone shot to 4s and color graded"
                   value={snapshotMsg}
                   onChange={(e) => setSnapshotMsg(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#0071e3]"
                   required
                 />
               </div>
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition"
+              className="px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium rounded-full transition shadow-sm"
             >
               Save Snapshot
             </button>
@@ -483,10 +489,10 @@ export default function LeadEditorPage() {
 
           {/* Working Tree / Branch Status Bar */}
           <div
-            className={`rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
+            className={`rounded-2xl border p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
               hasDraftChanges
-                ? 'bg-amber-950/40 border-amber-600/70 shadow-lg text-amber-200'
-                : 'bg-slate-900 border-slate-800 text-slate-400'
+                ? 'bg-amber-950/20 border-amber-500/50 shadow-lg text-amber-200'
+                : 'bg-[#131317] border border-[#22222a] text-zinc-400'
             }`}
           >
             <div className="flex items-center gap-2.5">
@@ -500,7 +506,7 @@ export default function LeadEditorPage() {
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-amber-300">Working Draft: Unpublished Changes</span>
-                      <span className="font-mono bg-amber-900/60 px-1.5 py-0.5 rounded text-[11px] text-amber-200">
+                      <span className="font-mono bg-amber-900/60 px-2 py-0.5 rounded-full text-[11px] text-amber-200">
                         +{draftDiff?.addedCount} added &bull; ~{draftDiff?.modifiedCount} modified &bull; -{draftDiff?.removedCount} removed
                       </span>
                     </div>
@@ -511,12 +517,12 @@ export default function LeadEditorPage() {
                 ) : (
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-300">Clean Master Cut (HEAD)</span>
-                      <span className="font-mono text-slate-500 text-[11px]">
+                      <span className="font-semibold text-zinc-300">Clean Master Cut (HEAD)</span>
+                      <span className="font-mono text-zinc-500 text-[11px]">
                         Snapshot #{project.snapshots.length}: &ldquo;{latestSnapshot?.message || 'Initial'}&rdquo;
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-zinc-500">
                       Edit freely below. Edits remain private drafts until you click &ldquo;Publish Cut to Main&rdquo;.
                     </p>
                   </div>
@@ -529,14 +535,14 @@ export default function LeadEditorPage() {
                 <button
                   type="button"
                   onClick={() => setShowDraftDiff(!showDraftDiff)}
-                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded border border-slate-700 transition"
+                  className="px-3 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-200 font-medium rounded-full border border-[#2a2a36] transition"
                 >
                   {showDraftDiff ? 'Hide Draft Diff' : 'Inspect Changes'}
                 </button>
                 <button
                   type="button"
                   onClick={handleDiscardDraft}
-                  className="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-semibold rounded border border-rose-800/60 transition"
+                  className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-medium rounded-full border border-rose-800/60 transition"
                   title="Discard all uncommitted draft edits and revert to the latest snapshot"
                 >
                   Discard Draft
@@ -544,10 +550,11 @@ export default function LeadEditorPage() {
                 <button
                   type="button"
                   onClick={() => handlePublishDraft()}
-                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded shadow-md transition flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full shadow-md transition flex items-center gap-1.5"
                   title="Push changes to Main (Snapshot) so collaborators can sync"
                 >
-                  <span>🚀 Push Cut to Main</span>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Push Cut to Main</span>
                 </button>
               </div>
             )}
@@ -555,17 +562,18 @@ export default function LeadEditorPage() {
 
           {/* Optional Draft Diff Viewer */}
           {hasDraftChanges && showDraftDiff && latestSnapshot && project?.masterDraft && (
-            <div className="bg-slate-900 border border-amber-600/50 rounded-xl p-4 space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="bg-[#131317] border border-amber-600/50 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-[#22222a]">
                 <span className="font-bold text-amber-300 text-xs">
                   Diff: Latest Snapshot ({latestSnapshot.id.slice(0, 10)}) &rarr; Current Working Draft
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowDraftDiff(false)}
-                  className="text-slate-400 hover:text-white text-xs"
+                  className="text-zinc-400 hover:text-white text-xs flex items-center gap-1"
                 >
-                  ✕ Close
+                  <X className="w-3.5 h-3.5" />
+                  <span>Close</span>
                 </button>
               </div>
               <DiffViewer
@@ -597,23 +605,23 @@ export default function LeadEditorPage() {
         </section>
 
         {/* Review Requests & Variations from Collaborators */}
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <section className="bg-[#131317] border border-[#22222a] rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <span>Incoming Review Requests</span>
-                <span className="text-xs bg-amber-950 text-amber-300 border border-amber-800/80 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-amber-950/60 text-amber-300 border border-amber-600/60 px-2.5 py-0.5 rounded-full font-mono">
                   {project.reviews.filter((r) => r.status === 'open').length} Open
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-zinc-400">
                 Review, inspect timeline diffs, and combine/merge variations proposed by collaborators
               </p>
             </div>
           </div>
 
           {project.reviews.length === 0 ? (
-            <div className="text-center py-6 text-slate-500 text-xs">
+            <div className="text-center py-6 text-zinc-500 text-xs">
               No review requests submitted yet. Open the collaborator link in another tab to submit one!
             </div>
           ) : (
@@ -633,10 +641,10 @@ export default function LeadEditorPage() {
                   <div
                     key={rev.id}
                     className={`rounded-xl border p-4 transition ${rev.status === 'open'
-                      ? 'bg-slate-950/90 border-amber-700/50 shadow-md'
+                      ? 'bg-[#18181f] border-amber-500/40 shadow-md'
                       : rev.status === 'combined'
-                        ? 'bg-slate-950/40 border-emerald-800/40 opacity-80'
-                        : 'bg-slate-950/40 border-slate-800'
+                        ? 'bg-[#18181f]/60 border-emerald-800/40 opacity-80'
+                        : 'bg-[#18181f]/40 border-[#262632]'
                       }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
@@ -669,12 +677,22 @@ export default function LeadEditorPage() {
                       </div>
 
                       <div className="flex items-center space-x-2 shrink-0">
+                        <Link
+                          href={`/lead/${projectId}/review/${rev.id}`}
+                          className="px-2.5 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 hover:text-white text-xs font-semibold rounded border border-indigo-700/60 transition flex items-center gap-1.5"
+                          title="Open dedicated review page with Ghost Timeline"
+                        >
+                          <FileSearch className="w-3.5 h-3.5" />
+                          <span>Review Page</span>
+                          <span>&rarr;</span>
+                        </Link>
+
                         <button
                           type="button"
                           onClick={() => setSelectedReviewId(isSelected ? null : rev.id)}
                           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition"
                         >
-                          {isSelected ? 'Hide Diff' : 'Inspect Diff'}
+                          {isSelected ? 'Hide Quick Diff' : 'Quick Diff'}
                         </button>
 
                         {rev.status === 'open' && (
@@ -767,45 +785,45 @@ export default function LeadEditorPage() {
         </section>
 
         {/* Snapshots Log (Commit History) */}
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <section className="bg-[#131317] border border-[#22222a] rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <span>Snapshots History</span>
-              <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+              <span className="text-xs bg-[#1f1f28] text-zinc-400 border border-[#2a2a36] px-2.5 py-0.5 rounded-full font-mono">
                 {project.snapshots.length}
               </span>
             </h2>
-            <span className="text-xs text-slate-500">Immutable Timeline Checkpoints</span>
+            <span className="text-xs text-zinc-500">Immutable Timeline Checkpoints</span>
           </div>
 
           <div className="space-y-3">
             {[...project.snapshots].reverse().map((snap, idx) => (
               <div
                 key={snap.id}
-                className="p-3 bg-slate-950 rounded-lg border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                className="p-3 bg-[#18181f] rounded-xl border border-[#242430] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-[#323242] transition"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                    <span className="font-semibold text-slate-200 text-xs sm:text-sm">
+                    <span className="w-2 h-2 rounded-full bg-[#0071e3]"></span>
+                    <span className="font-semibold text-zinc-100 text-xs sm:text-sm">
                       {snap.message}
                     </span>
                     {idx === 0 && (
-                      <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-700/60 px-1.5 py-0.2 rounded font-mono">
+                      <span className="text-[10px] bg-[#0071e3]/20 text-[#0071e3] border border-[#0071e3]/40 px-2 py-0.5 rounded-full font-mono">
                         HEAD
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                    <span>by <strong className="text-slate-400">{snap.author}</strong></span>
+                  <div className="text-[11px] text-zinc-500 flex items-center gap-3">
+                    <span>by <strong className="text-zinc-300">{snap.author}</strong></span>
                     <span>&bull;</span>
-                    <span className="font-mono text-slate-500">id: {snap.id.slice(0, 14)}</span>
+                    <span className="font-mono text-zinc-500">id: {snap.id.slice(0, 14)}</span>
                     <span>&bull;</span>
                     <span>{new Date(snap.createdAt).toLocaleTimeString()}</span>
                   </div>
                 </div>
 
-                <div className="text-xs font-mono text-slate-400 shrink-0">
+                <div className="text-xs font-mono text-zinc-400 shrink-0">
                   {snap.timeline.clips.length} clip{snap.timeline.clips.length !== 1 ? 's' : ''}
                 </div>
               </div>

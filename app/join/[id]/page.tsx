@@ -13,6 +13,20 @@ import { Clip, MediaItem, ReviewRequest, Timeline, Variation } from '@/lib/types
 import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
 import { diffTimelines } from '@/lib/diff';
 import { hasTrackOverlaps, preventOverlaps, rebaseVariation } from '@/lib/vc';
+import {
+  Sparkles,
+  GitBranch,
+  ExternalLink,
+  Check,
+  Edit3,
+  RefreshCw,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Radio,
+  X,
+  Plus
+} from 'lucide-react';
 
 export default function CollaboratorPage() {
   const params = useParams();
@@ -32,9 +46,20 @@ export default function CollaboratorPage() {
   const [varAuthor, setVarAuthor] = useState('Jordan (Collaborator)');
   const [varBaseSnapshotId, setVarBaseSnapshotId] = useState('');
 
+  // Check if URL specifies ?new=1 or ?branch=1 to open variation creation directly
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === '1' || params.get('branch') === '1') {
+        setIsCreatingVariation(true);
+      }
+    }
+  }, []);
+
   // Submit review form state
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewMessage, setReviewMessage] = useState('');
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
 
   const latestSnapshot = project && project.snapshots.length > 0
     ? project.snapshots[project.snapshots.length - 1]
@@ -51,6 +76,21 @@ export default function CollaboratorPage() {
     project?.variations[0] ||
     null;
 
+  // Whether collaborator is creating a variation or if no variations exist yet
+  const shouldShowCreateVariation = Boolean(
+    isCreatingVariation || !activeVariation || (project && project.variations.length === 0)
+  );
+
+  // Selected base snapshot for the new variation creation preview
+  const selectedBaseSnap = React.useMemo(() => {
+    if (!project || project.snapshots.length === 0) return null;
+    if (varBaseSnapshotId) {
+      const found = project.snapshots.find((s) => s.id === varBaseSnapshotId);
+      if (found) return found;
+    }
+    return latestWithClips || latestSnapshot || project.snapshots[0];
+  }, [project, varBaseSnapshotId, latestWithClips, latestSnapshot]);
+
   // Associated review request if any
   const currentReview = activeVariation
     ? [...(project?.reviews || [])].reverse().find((r) => r.variationId === activeVariation.id)
@@ -61,9 +101,52 @@ export default function CollaboratorPage() {
     ? project?.snapshots.find((s) => s.id === activeVariation.baseSnapshotId) || latestSnapshot
     : latestSnapshot;
 
-  // Check if Main has pushed new snapshot(s) since this variation was created/synced
+  // Compute diff between active variation and base snapshot
+  const variationToBaseDiff = React.useMemo(() => {
+    if (!activeVariation || !baseSnapshot) return null;
+    return diffTimelines(baseSnapshot.timeline, activeVariation.timeline);
+  }, [activeVariation, baseSnapshot]);
+
+  const hasVariationChanges = Boolean(
+    variationToBaseDiff &&
+    (variationToBaseDiff.addedCount > 0 ||
+      variationToBaseDiff.modifiedCount > 0 ||
+      variationToBaseDiff.removedCount > 0)
+  );
+
+  const totalChangesCount = variationToBaseDiff
+    ? variationToBaseDiff.addedCount + variationToBaseDiff.modifiedCount + variationToBaseDiff.removedCount
+    : 0;
+
+  // Compute diff between active variation and latest snapshot on Main
+  const variationToMainDiff = React.useMemo(() => {
+    if (!activeVariation || !latestSnapshot) return null;
+    return diffTimelines(activeVariation.timeline, latestSnapshot.timeline);
+  }, [activeVariation, latestSnapshot]);
+
+  // True only if Main has genuine differences compared to what this variation already has
+  const hasActualMainDifferences = Boolean(
+    variationToMainDiff &&
+    (variationToMainDiff.addedCount > 0 ||
+      variationToMainDiff.modifiedCount > 0 ||
+      variationToMainDiff.removedCount > 0)
+  );
+
+  // Whether this variation is considered merged into Main with NO unsubmitted changes
+  // In Git: A branch is merged only if its status is 'combined' AND there are no new local edits.
+  const isVariationCombined = Boolean(
+    activeVariation &&
+    activeVariation.status === 'combined' &&
+    !hasVariationChanges
+  );
+
+  // Check if Main has pushed genuine new updates by Lead (not just merging this variation!)
   const isBaseSnapshotOutdated = Boolean(
-    activeVariation && latestSnapshot && activeVariation.baseSnapshotId !== latestSnapshot.id
+    activeVariation &&
+    !isVariationCombined &&
+    latestSnapshot &&
+    activeVariation.baseSnapshotId !== latestSnapshot.id &&
+    hasActualMainDifferences
   );
 
   // Compute diff between base snapshot and latest pushed snapshot on Main
@@ -186,6 +269,7 @@ export default function CollaboratorPage() {
       });
       return { ...prev, variations: updatedVariations };
     });
+    setIsSubmittingReview(true);
   }, [activeVariation, setProject]);
 
   // Auto-build timeline from uploaded media items
@@ -248,40 +332,6 @@ export default function CollaboratorPage() {
     }
   }, [activeVariation, handleUpdateVariationTimeline]);
 
-  // Auto-branch initial variation if project has snapshots or media but no variations yet
-  useEffect(() => {
-    if (project && project.variations.length === 0) {
-      const baseSnap = latestWithClips || latestSnapshot;
-      const sourceClips =
-        baseSnap && baseSnap.timeline.clips.length > 0
-          ? baseSnap.timeline.clips
-          : project.masterDraft && project.masterDraft.clips.length > 0
-            ? project.masterDraft.clips
-            : project.media && project.media.length > 0
-              ? buildTimeline(project.media).clips
-              : [];
-
-      if (sourceClips.length > 0) {
-        const initialVar: Variation = {
-          id: `var_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          name: "Collaborator's Cut",
-          author: 'Jordan (Collaborator)',
-          baseSnapshotId: baseSnap ? baseSnap.id : '',
-          timeline: { clips: JSON.parse(JSON.stringify(sourceClips)) },
-          status: 'editing',
-        };
-        setProject((prev) => {
-          if (!prev || prev.variations.length > 0) return prev;
-          return {
-            ...prev,
-            variations: [initialVar],
-          };
-        });
-        setSelectedVariationId(initialVar.id);
-      }
-    }
-  }, [project, latestWithClips, latestSnapshot, setProject]);
-
   // If active variation has no clips yet but project has media or snapshot clips, populate it
   useEffect(() => {
     if (activeVariation && activeVariation.timeline.clips.length === 0 && project) {
@@ -296,9 +346,9 @@ export default function CollaboratorPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-[#0a0a0d] flex items-center justify-center text-zinc-400">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-4 h-4 border-2 border-[#34c759] border-t-transparent rounded-full animate-spin"></div>
           <span>Loading project...</span>
         </div>
       </div>
@@ -307,16 +357,16 @@ export default function CollaboratorPage() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="min-h-screen bg-[#0a0a0d] text-zinc-100">
         <Header role="Collaborator" />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
           <h2 className="text-xl font-bold text-white">Project Not Found</h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-zinc-400">
             Could not find a project with ID &quot;{projectId}&quot; in local storage.
           </p>
           <Link
             href="/"
-            className="inline-block px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold transition"
+            className="inline-block px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-full text-sm font-medium transition"
           >
             &larr; Return to Home
           </Link>
@@ -381,8 +431,7 @@ export default function CollaboratorPage() {
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeVariation) return;
-    const msg = reviewMessage.trim();
-    if (!msg) return;
+    const msg = reviewMessage.trim() || `Refined and updated variation "${activeVariation.name}" (${totalChangesCount > 0 ? `${totalChangesCount} clip changes` : 'edits ready for review'})`;
 
     // If activeVariation's baseSnapshotId points to an empty snapshot, re-anchor to latestWithClips
     const baseSnapObj = project.snapshots.find((s) => s.id === activeVariation.baseSnapshotId);
@@ -410,6 +459,7 @@ export default function CollaboratorPage() {
       };
     });
 
+    setReviewSuccessMsg(`Review request sent to Lead Editor for "${activeVariation.name}"! Lead can now review your ghost timeline diffs and combine your cuts into Main.`);
     setReviewMessage('');
     setIsSubmittingReview(false);
   };
@@ -425,7 +475,7 @@ export default function CollaboratorPage() {
       if (activeVariation) {
         updatedVariations = updatedVariations.map((v) =>
           v.id === activeVariation.id
-            ? { ...v, timeline: generatedTimeline, status: v.status === 'combined' ? v.status : ('editing' as const) }
+            ? { ...v, timeline: generatedTimeline, status: 'editing' as const }
             : v
         );
       }
@@ -440,20 +490,20 @@ export default function CollaboratorPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0d] text-zinc-100">
       <Header projectId={project.id} projectName={project.name} role="Collaborator" />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 space-y-6">
         {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131317] border border-[#22222a] rounded-2xl p-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white">{project.name}</h1>
-              <span className="text-xs bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-mono">
+              <span className="text-xs bg-[#34c759]/20 text-[#34c759] border border-[#34c759]/40 px-2.5 py-0.5 rounded-full font-mono">
                 Collaborator Workspace
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-zinc-400 mt-1">
               Branch off base snapshots, experiment with edits, and submit review requests for Lead approval.
             </p>
           </div>
@@ -462,121 +512,61 @@ export default function CollaboratorPage() {
             <button
               type="button"
               onClick={handleLoadPlaceholderSample}
-              className="px-3 py-1.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-xs font-semibold rounded-lg transition border border-purple-700/60 shadow-sm flex items-center gap-1.5"
+              className="px-3.5 py-1.5 bg-[#6e40c9]/20 hover:bg-[#6e40c9]/30 text-[#a371f7] text-xs font-medium rounded-full transition border border-[#6e40c9]/40 shadow-sm flex items-center gap-1.5"
               title="Load 6 placeholder clips with no media (colored boxes only)"
             >
-              <span>★ Load 6-Clip Sample</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Load 6-Clip Sample</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setIsCreatingVariation(!isCreatingVariation)}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+              onClick={() => setIsCreatingVariation(true)}
+              className="px-3.5 py-1.5 bg-[#34c759] hover:bg-[#2ea043] text-black text-xs font-semibold rounded-full transition shadow-sm flex items-center gap-1.5"
             >
-              <span>+ Branch New Variation</span>
+              <GitBranch className="w-3.5 h-3.5" />
+              <span>Branch New Variation</span>
             </button>
 
             <Link
               href={`/lead/${project.id}`}
               target="_blank"
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-1.5"
+              className="px-3.5 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-200 text-xs font-medium rounded-full transition border border-[#2a2a36] flex items-center gap-1.5"
               title="Open Lead Editor view in a new tab"
             >
-              <span>Open Lead Editor in New Tab &#8599;</span>
+              <span>Open Lead Editor in New Tab</span>
+              <ExternalLink className="w-3 h-3 text-zinc-400" />
             </Link>
           </div>
         </div>
 
-        {/* Create Variation Form */}
-        {isCreatingVariation && (
-          <form
-            onSubmit={handleCreateVariation}
-            className="p-4 bg-slate-900 border border-emerald-700/60 rounded-xl space-y-3 text-xs"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-semibold text-emerald-300">Create New Variation Branch</span>
-              <button
-                type="button"
-                onClick={() => setIsCreatingVariation(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕ Cancel
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-slate-400 mb-1">Variation Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dynamic B-roll on V2"
-                  value={varName}
-                  onChange={(e) => setVarName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Author Name</label>
-                <input
-                  type="text"
-                  value={varAuthor}
-                  onChange={(e) => setVarAuthor(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Base Snapshot</label>
-                <select
-                  value={varBaseSnapshotId || (latestWithClips ? latestWithClips.id : latestSnapshot?.id || '')}
-                  onChange={(e) => setVarBaseSnapshotId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
-                >
-                  {[...project.snapshots].reverse().map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.message} ({s.timeline.clips.length} clip{s.timeline.clips.length !== 1 ? 's' : ''} • {s.id.slice(0, 8)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition"
-            >
-              Start Editing Variation
-            </button>
-          </form>
-        )}
-
         {/* Variation Selector Bar */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-[#131317] border border-[#22222a] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3 overflow-x-auto py-1">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider shrink-0">
+            <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider shrink-0">
               Variations:
             </span>
 
             {project.variations.length === 0 ? (
-              <span className="text-xs text-slate-500 italic">No variations created yet</span>
+              <span className="text-xs text-zinc-500 italic">No variations created yet</span>
             ) : (
               project.variations.map((v) => {
-                const isActive = activeVariation?.id === v.id;
+                const isActive = activeVariation?.id === v.id && !isCreatingVariation;
                 return (
                   <button
                     key={v.id}
-                    onClick={() => setSelectedVariationId(v.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-2 shrink-0 ${isActive
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-600 shadow-sm'
-                      : 'bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800 hover:bg-slate-800'
+                    onClick={() => {
+                      setSelectedVariationId(v.id);
+                      setIsCreatingVariation(false);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition flex items-center space-x-2 shrink-0 ${isActive
+                      ? 'bg-[#34c759]/20 text-[#34c759] border border-[#34c759]/60 shadow-sm'
+                      : 'bg-[#18181f] text-zinc-400 hover:text-zinc-200 border border-[#262632] hover:bg-[#202028]'
                       }`}
                   >
                     <span>{v.name}</span>
                     <span
-                      className={`text-[9px] uppercase px-1.5 py-0.2 rounded-full font-bold ${v.status === 'combined'
+                      className={`text-[9px] uppercase px-2 py-0.2 rounded-full font-bold ${v.status === 'combined'
                         ? 'bg-purple-900 text-purple-200'
                         : v.status === 'in-review'
                           ? 'bg-amber-900 text-amber-200'
@@ -593,42 +583,61 @@ export default function CollaboratorPage() {
             <button
               type="button"
               onClick={() => setIsCreatingVariation(true)}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition shrink-0"
+              className={`px-3 py-1 text-xs rounded-full border transition shrink-0 flex items-center gap-1 ${
+                isCreatingVariation
+                  ? 'bg-[#34c759]/20 text-[#34c759] border-[#34c759]/60 font-semibold shadow-sm'
+                  : 'bg-[#18181f] hover:bg-[#22222a] text-zinc-300 border-[#2a2a36]'
+              }`}
               title="Create another variation branch"
             >
-              + New Variation
+              <Plus className="w-3 h-3" />
+              <span>New Variation</span>
             </button>
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
-            {activeVariation && (
+            {activeVariation && !isCreatingVariation && (
               <div className="flex items-center space-x-2">
-                {activeVariation.status === 'combined' ? (
+                {isVariationCombined ? (
                   <div className="flex items-center space-x-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-950 text-purple-300 border border-purple-800">
-                      <span>✓</span> Merged into Master
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Merged into Main</span>
                     </span>
                     <button
                       type="button"
                       onClick={handleReopenVariation}
-                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1"
-                      title="Unlock this variation to make more edits and submit another review"
+                      className="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold rounded-full transition shadow-sm flex items-center gap-1.5"
+                      title="Propose new changes on this variation"
                     >
-                      <span>✏ Edit / Re-open</span>
+                      <Edit3 className="w-3 h-3" />
+                      <span>Propose New Changes</span>
                     </button>
                   </div>
                 ) : activeVariation.status === 'in-review' ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                    In Review with Lead
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                      In Review
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSubmittingReview(true)}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-full transition shadow-sm flex items-center gap-1.5"
+                      title="Update review request with newest edits"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Update Review &rarr;</span>
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setIsSubmittingReview(!isSubmittingReview)}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition shadow-sm flex items-center gap-1.5"
+                    onClick={() => setIsSubmittingReview(true)}
+                    className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-full transition shadow-md flex items-center gap-1.5"
                   >
-                    <span>Submit for Review &rarr;</span>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Submit for Review {totalChangesCount > 0 ? `(${totalChangesCount})` : ''} &rarr;</span>
                   </button>
                 )}
               </div>
@@ -636,11 +645,29 @@ export default function CollaboratorPage() {
           </div>
         </div>
 
+        {/* Success Banner when Review is Submitted */}
+        {reviewSuccessMsg && (
+          <div className="p-4 bg-emerald-950/60 border border-emerald-600/80 rounded-xl flex items-center justify-between text-xs text-emerald-200 shadow-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{reviewSuccessMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReviewSuccessMsg(null)}
+              className="text-emerald-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Change Request Banner if Lead requested changes */}
         {currentReview && currentReview.status === 'changes-requested' && (
           <div className="p-4 bg-rose-950/40 border border-rose-800/80 rounded-xl space-y-2">
             <div className="flex items-center gap-2 text-rose-300 font-bold text-xs uppercase tracking-wider">
-              <span>⚠ Changes Requested by Lead</span>
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>Changes Requested by Lead</span>
             </div>
             <p className="text-xs text-rose-200">
               <strong>Lead note:</strong> {currentReview.note || 'Please refine the edits and re-submit.'}
@@ -655,68 +682,114 @@ export default function CollaboratorPage() {
         {isSubmittingReview && activeVariation && (
           <form
             onSubmit={handleSubmitReview}
-            className="p-4 bg-slate-900 border border-amber-700/60 rounded-xl space-y-3 text-xs"
+            className="p-4 bg-slate-900 border border-amber-700/60 rounded-xl space-y-3 text-xs shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-semibold text-amber-300">
-                Submit &quot;{activeVariation.name}&quot; for Review
-              </span>
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="font-semibold text-amber-300">
+                  Submit &quot;{activeVariation.name}&quot; for Review to Lead
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsSubmittingReview(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white flex items-center gap-1"
               >
-                ✕ Cancel
+                <X className="w-3.5 h-3.5" />
+                <span>Cancel</span>
               </button>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">
-                Summary of changes for Lead Editor
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-slate-400">
+                  Summary of changes for Lead Editor
+                </label>
+                {totalChangesCount > 0 && (
+                  <span className="text-[10px] text-amber-300 font-mono">
+                    {totalChangesCount} clip change{totalChangesCount !== 1 ? 's' : ''} detected
+                  </span>
+                )}
+              </div>
               <textarea
                 value={reviewMessage}
                 onChange={(e) => setReviewMessage(e.target.value)}
-                placeholder="e.g. Replaced slow intro with fast-paced cuts, synchronized audio on A1"
+                placeholder={
+                  totalChangesCount > 0
+                    ? `e.g. Trimmed and refined ${totalChangesCount} clip(s) on ${activeVariation.name}`
+                    : "e.g. Replaced slow intro with fast-paced cuts, synchronized audio on A1"
+                }
                 rows={2}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white"
-                required
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white placeholder-slate-500"
               />
             </div>
 
-            <button
-              type="submit"
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg transition"
-            >
-              Send Review Request to Lead
-            </button>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-400">
+                Lead Editor will receive diff notifications and can inspect ghost timelines to combine into Main.
+              </span>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition shadow-md flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Send Review Request to Lead &rarr;</span>
+              </button>
+            </div>
           </form>
         )}
 
-        {/* Banner: Lead has pushed new cut to Main */}
-        {isBaseSnapshotOutdated && activeVariation && (
-          <div className="p-4 bg-indigo-950/40 border border-indigo-700/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-lg">
+        {/* Banner: Variation was merged into Main cut */}
+        {activeVariation && isVariationCombined && (
+          <div className="p-4 bg-purple-950/40 border border-purple-800/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-md">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 font-bold text-indigo-300">
-                <span className="text-sm">📢 Lead Pushed New Cut to Main: &quot;{latestSnapshot?.message || 'Update'}&quot;</span>
+              <div className="flex items-center gap-2 font-bold text-purple-300">
+                <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>Merged into Main: &quot;{activeVariation.name}&quot; has been combined into the official Master cut!</span>
+              </div>
+              <p className="text-slate-300 text-xs">
+                Your cuts were successfully merged by the Lead Editor. You can branch a fresh variation from this milestone, or click &quot;Edit / Re-open&quot; above to propose more changes.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCreatingVariation(true)}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition shadow flex items-center gap-1.5"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Branch New Variation</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Banner: Lead has pushed new cut to Main */}
+        {isBaseSnapshotOutdated && activeVariation && !isVariationCombined && (
+          <div className="p-4 bg-[#131317] border border-[#5856d6]/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-lg">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-bold text-[#a371f7]">
+                <Radio className="w-4 h-4 text-indigo-400 shrink-0 animate-pulse" />
+                <span className="text-sm">Lead Pushed New Cut to Main: &quot;{latestSnapshot?.message || 'Update'}&quot;</span>
                 {trimmedClipsOnMain.length > 0 && (
-                  <span className="text-[10px] bg-amber-900/80 text-amber-200 border border-amber-700/60 px-2 py-0.5 rounded-full font-mono">
+                  <span className="text-[10px] bg-amber-900/60 text-amber-200 border border-amber-700/60 px-2 py-0.5 rounded-full font-mono">
                     {trimmedClipsOnMain.length} clip{trimmedClipsOnMain.length !== 1 ? 's' : ''} trimmed/moved
                   </span>
                 )}
                 {deletedOnMain.length > 0 && (
-                  <span className="text-[10px] bg-rose-900/80 text-rose-200 border border-rose-700/60 px-2 py-0.5 rounded-full font-mono">
+                  <span className="text-[10px] bg-rose-900/60 text-rose-200 border border-rose-700/60 px-2 py-0.5 rounded-full font-mono">
                     {deletedOnMain.length} clip{deletedOnMain.length !== 1 ? 's' : ''} deleted
                   </span>
                 )}
                 {addedOnMain.length > 0 && (
-                  <span className="text-[10px] bg-emerald-900/80 text-emerald-200 border border-emerald-700/60 px-2 py-0.5 rounded-full font-mono">
+                  <span className="text-[10px] bg-emerald-900/60 text-emerald-200 border border-emerald-700/60 px-2 py-0.5 rounded-full font-mono">
                     {addedOnMain.length} clip{addedOnMain.length !== 1 ? 's' : ''} added
                   </span>
                 )}
               </div>
-              <p className="text-slate-300 text-xs">
-                The Lead Editor pushed new changes to Main. Click <strong>↻ Sync from Main</strong> to rebase trims into this variation, or <strong>Reset to Main</strong> to match 100%.
+              <p className="text-zinc-300 text-xs">
+                The Lead Editor pushed new changes to Main. Click <strong>Sync from Main</strong> to rebase trims into this variation, or <strong>Reset to Main</strong> to match 100%.
               </p>
             </div>
 
@@ -724,15 +797,16 @@ export default function CollaboratorPage() {
               <button
                 type="button"
                 onClick={handleSyncWithMain}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-xs transition shadow flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium rounded-full text-xs transition shadow flex items-center gap-1.5"
                 title="Pull Lead's latest trims and updates into this variation"
               >
-                <span>↻ Sync from Main (Rebase)</span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Sync from Main (Rebase)</span>
               </button>
               <button
                 type="button"
                 onClick={handleResetToMain}
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs border border-slate-700 transition"
+                className="px-3 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-300 rounded-full text-xs border border-[#2a2a36] transition"
                 title="Reset this variation completely to match Master"
               >
                 Reset to Main
@@ -741,8 +815,139 @@ export default function CollaboratorPage() {
           </div>
         )}
 
-        {/* Variation Timeline & Player */}
-        {activeVariation ? (
+        {/* Create Variation Screen (when creating new variation or when no variations exist yet) */}
+        {shouldShowCreateVariation ? (
+          <section className="space-y-6">
+            <div className="bg-[#131317] border border-[#34c759]/40 rounded-2xl p-6 shadow-xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#22222a] pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-[#34c759]/20 text-[#34c759] border border-[#34c759]/40 px-2.5 py-0.5 rounded-full font-mono font-semibold flex items-center gap-1">
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span>Git Branching</span>
+                    </span>
+                    <h2 className="text-xl font-bold text-white">Create New Variation Branch</h2>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Branch off the Lead Editor&apos;s timeline to propose your cut, trim clips, add B-roll, and submit for review.
+                  </p>
+                </div>
+
+                {activeVariation && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingVariation(false)}
+                    className="text-xs px-3.5 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-300 rounded-full border border-[#2a2a36] transition"
+                  >
+                    ← Back to &quot;{activeVariation.name}&quot;
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleCreateVariation} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Variation Name <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dynamic B-roll, Fast Intro Cut"
+                      value={varName}
+                      onChange={(e) => setVarName(e.target.value)}
+                      className="w-full bg-[#18181f] border border-[#2a2a36] focus:border-[#34c759] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#34c759]"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Author / Collaborator Name <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={varAuthor}
+                      onChange={(e) => setVarAuthor(e.target.value)}
+                      className="w-full bg-[#18181f] border border-[#2a2a36] focus:border-[#34c759] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#34c759]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Base Snapshot to Branch From
+                    </label>
+                    <select
+                      value={varBaseSnapshotId || (selectedBaseSnap ? selectedBaseSnap.id : '')}
+                      onChange={(e) => setVarBaseSnapshotId(e.target.value)}
+                      className="w-full bg-[#18181f] border border-[#2a2a36] focus:border-[#34c759] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#34c759]"
+                    >
+                      {[...project.snapshots].reverse().map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.message} ({s.timeline.clips.length} clip{s.timeline.clips.length !== 1 ? 's' : ''} • {s.id.slice(0, 8)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <span className="text-xs text-zinc-400">
+                    Clones all tracks and clips from the selected milestone into your private variation.
+                  </span>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-[#34c759] hover:bg-[#2ea043] text-black font-bold rounded-full text-sm transition shadow-lg flex items-center justify-center gap-2 shrink-0"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Start Editing Variation &rarr;</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Base Snapshot Preview */}
+            {selectedBaseSnap && (
+              <div className="bg-[#131317] border border-[#22222a] rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Base Snapshot Preview:</span>
+                      <span className="text-[#0071e3] font-medium">&quot;{selectedBaseSnap.message}&quot;</span>
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {selectedBaseSnap.timeline.clips.length} clip{selectedBaseSnap.timeline.clips.length !== 1 ? 's' : ''} &bull; Author: {selectedBaseSnap.author} &bull; ID: <span className="font-mono">{selectedBaseSnap.id.slice(0, 8)}</span>
+                    </p>
+                  </div>
+                  <span className="text-xs text-zinc-500 italic">Read-only milestone preview</span>
+                </div>
+
+                {selectedBaseSnap.timeline.clips.length > 0 ? (
+                  <>
+                    <PlayerView
+                      timeline={selectedBaseSnap.timeline}
+                      time={playerTime}
+                      onTime={setPlayerTime}
+                    />
+                    <TimelineView
+                      timeline={selectedBaseSnap.timeline}
+                      mediaList={project.media}
+                      editable={false}
+                      time={playerTime}
+                      onTime={setPlayerTime}
+                      title={`Lead Base Milestone (${selectedBaseSnap.timeline.clips.length} clips)`}
+                    />
+                  </>
+                ) : (
+                  <div className="py-8 text-center text-zinc-500 text-xs">
+                    Base snapshot has no clips yet. You can build clips using the media bin below once your variation is created.
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        ) : activeVariation ? (
           <section className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -763,6 +968,43 @@ export default function CollaboratorPage() {
             </div>
 
             <div className="space-y-2">
+              <div className="flex items-center justify-between bg-[#131317] border border-[#22222a] rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#34c759]"></span>
+                  <span className="text-xs font-bold text-white">
+                    Variation: {activeVariation.name}
+                  </span>
+                  <span
+                    className={`text-[9px] uppercase px-2 py-0.2 rounded-full font-bold ${
+                      activeVariation.status === 'combined'
+                        ? 'bg-purple-900 text-purple-200'
+                        : activeVariation.status === 'in-review'
+                          ? 'bg-amber-900 text-amber-200'
+                          : 'bg-emerald-900 text-emerald-200'
+                    }`}
+                  >
+                    {activeVariation.status}
+                  </span>
+                  {totalChangesCount > 0 && (
+                    <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-0.5 rounded-full font-mono">
+                      {totalChangesCount} clip change{totalChangesCount !== 1 ? 's' : ''} ready
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSubmittingReview(true);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-full transition shadow-md flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Submit for Review &rarr;</span>
+                </button>
+              </div>
+
               <TimelineView
                 timeline={activeVariation.timeline}
                 mediaList={project.media}
@@ -777,9 +1019,22 @@ export default function CollaboratorPage() {
             {/* Diff against base snapshot */}
             {baseSnapshot && (
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Changes compared to base snapshot ({baseSnapshot.message})
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Changes compared to base snapshot ({baseSnapshot.message})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSubmittingReview(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-full transition shadow-sm flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Submit {totalChangesCount > 0 ? `${totalChangesCount} Changes` : ''} for Review &rarr;</span>
+                  </button>
+                </div>
                 <DiffViewer
                   baseTimeline={baseSnapshot.timeline}
                   variationTimeline={activeVariation.timeline}
@@ -787,21 +1042,8 @@ export default function CollaboratorPage() {
               </div>
             )}
           </section>
-        ) : (
-          <div className="p-8 bg-slate-900 border border-slate-800 rounded-xl text-center space-y-3">
-            <h3 className="font-bold text-white text-base">No Active Variation</h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              You haven&apos;t created or selected a variation branch yet. Click &quot;Branch New Variation&quot; above to clone the latest base snapshot and start editing!
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsCreatingVariation(true)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition"
-            >
-              + Create First Variation
-            </button>
-          </div>
-        )}
+        ) : null}
+
 
         {/* Dropzone & Media Bin */}
         <section>
