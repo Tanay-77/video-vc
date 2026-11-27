@@ -1,31 +1,4 @@
 import { Project } from './types';
-import { buildPlaceholderSampleTimeline } from './buildTimeline';
-
-/**
- * Builds a sample project with a timeline of 6 placeholder clips with no media (colored boxes only)
- */
-export function createPlaceholderSampleProject(): Project {
-  const projectId = 'sample-placeholders-6';
-  const timeline = buildPlaceholderSampleTimeline(); // Exactly 6 placeholder clips with mediaId: null
-
-  return {
-    id: projectId,
-    name: 'Placeholder Cut (6 Clips)',
-    media: [],
-    snapshots: [
-      {
-        id: 'snap-placeholder-initial',
-        parentId: null,
-        author: 'Lead Editor',
-        message: 'Assembly of 6 Colored Placeholder Clips',
-        createdAt: new Date().toISOString(),
-        timeline,
-      },
-    ],
-    variations: [],
-    reviews: [],
-  };
-}
 
 export function createSampleProject(): Project {
   const projectId = 'sample-summer-reel';
@@ -61,11 +34,77 @@ export function createSampleProject(): Project {
     ],
     snapshots: [
       {
-        id: 'snap-v1-initial',
+        id: 'snap-1-initial',
         parentId: null,
         author: 'Alex (Lead)',
-        message: 'Initial assembly cut: Drone opening to Sunset outro',
-        createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+        message: 'Initial cut',
+        createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+        timeline: {
+          clips: [
+            {
+              id: 'clip-base-1',
+              mediaId: 'sample-media-drone',
+              track: 'V1',
+              name: 'Aerial Bay Intro',
+              start: 0,
+              dur: 8.0,
+              sourceIn: 1.0,
+              sourceOut: 9.0,
+              speed: 1.0,
+            },
+            {
+              id: 'clip-base-3',
+              mediaId: 'sample-media-audio',
+              track: 'A1',
+              name: 'Synthwave Background',
+              start: 0,
+              dur: 14.0,
+              sourceIn: 0,
+              sourceOut: 14.0,
+              speed: 1.0,
+            },
+          ],
+        },
+      },
+      {
+        id: 'snap-2-trimmed',
+        parentId: 'snap-1-initial',
+        author: 'Alex (Lead)',
+        message: 'Trimmed intro',
+        createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        timeline: {
+          clips: [
+            {
+              id: 'clip-base-1',
+              mediaId: 'sample-media-drone',
+              track: 'V1',
+              name: 'Aerial Bay Intro',
+              start: 0,
+              dur: 6.0,
+              sourceIn: 1.0,
+              sourceOut: 7.0,
+              speed: 1.0,
+            },
+            {
+              id: 'clip-base-3',
+              mediaId: 'sample-media-audio',
+              track: 'A1',
+              name: 'Synthwave Background',
+              start: 0,
+              dur: 11.0,
+              sourceIn: 0,
+              sourceOut: 11.0,
+              speed: 1.0,
+            },
+          ],
+        },
+      },
+      {
+        id: 'snap-3-beach',
+        parentId: 'snap-2-trimmed',
+        author: 'Alex (Lead)',
+        message: 'Added beach clip',
+        createdAt: new Date(Date.now() - 3600000 * 1).toISOString(),
         timeline: {
           clips: [
             {
@@ -119,9 +158,9 @@ export function createSampleProject(): Project {
     variations: [
       {
         id: 'var-action-cut',
-        name: 'Dynamic Surfing B-Roll on V2',
-        author: 'Jordan (Collaborator)',
-        baseSnapshotId: 'snap-v1-initial',
+        name: 'Surfing Cut',
+        author: 'Jordan',
+        baseSnapshotId: 'snap-3-beach',
         status: 'in-review',
         timeline: {
           clips: [
@@ -188,8 +227,8 @@ export function createSampleProject(): Project {
       {
         id: 'rev-action-cut',
         variationId: 'var-action-cut',
-        baseSnapshotId: 'snap-v1-initial',
-        message: 'Overlaid surfing action cutaway on V2 between 2.5s and 6.0s for higher energy.',
+        baseSnapshotId: 'snap-3-beach',
+        message: 'Added surfing action clip on V2 between 2.5s and 6.0s',
         status: 'open',
       },
     ],

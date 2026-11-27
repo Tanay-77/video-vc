@@ -75,16 +75,16 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg p-4">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+    <div className="bg-[#161a20] border border-[#262b33] rounded-2xl overflow-hidden p-4 space-y-3">
+      <div className="flex items-center justify-between pb-3 border-b border-[#262b33]">
         <div>
-          <h3 className="font-semibold text-slate-200 text-sm flex items-center gap-2">
+          <h3 className="font-semibold text-[#e6e8eb] text-sm flex items-center gap-2">
             <span>Media Pool</span>
-            <span className="text-[11px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-[11px] bg-[#20252e] text-[#8b93a1] px-2 py-0.5 rounded-full font-mono border border-[#262b33]">
               IndexedDB ({media.length})
             </span>
           </h3>
-          <p className="text-[11px] text-slate-400">Binary assets kept locally in IndexedDB &amp; shared across tabs</p>
+          <p className="text-[11px] text-[#8b93a1]">Binary assets kept locally in IndexedDB &amp; shared across tabs</p>
         </div>
 
         <div>
@@ -99,11 +99,11 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
             type="button"
             disabled={isUploading}
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-1.5"
+            className="px-3.5 py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] disabled:bg-[#20252e] text-[#0f1115] text-xs font-semibold rounded-full transition flex items-center gap-1.5"
           >
             {isUploading ? (
               <>
-                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span className="w-3 h-3 border-2 border-[#0f1115] border-t-transparent rounded-full animate-spin"></span>
                 <span>Saving to DB...</span>
               </>
             ) : (
@@ -117,22 +117,22 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
       </div>
 
       {errorMsg && (
-        <div className="mb-3 p-2 text-xs bg-amber-950/60 border border-amber-800/60 rounded text-amber-300">
+        <div className="mb-3 p-2 text-xs bg-[#c9605f]/12 border border-[#c9605f]/40 rounded text-[#c9605f]">
           {errorMsg}
         </div>
       )}
 
       {/* Video Preview Modal if active */}
       {previewUrl && (
-        <div className="mb-4 p-3 bg-slate-950 rounded-lg border border-slate-800">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-            <span className="text-xs font-semibold text-slate-300 truncate">Preview: {previewMediaName}</span>
+        <div className="mb-4 p-3 bg-[#0f1115] rounded-xl border border-[#262b33]">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#262b33]">
+            <span className="text-xs font-semibold text-[#e6e8eb] truncate">Preview: {previewMediaName}</span>
             <button
               onClick={() => {
                 if (previewUrl) URL.revokeObjectURL(previewUrl);
                 setPreviewUrl(null);
               }}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+              className="text-xs text-[#8b93a1] hover:text-[#e6e8eb] flex items-center gap-1"
             >
               <X className="w-3.5 h-3.5" />
               <span>Close</span>
@@ -144,7 +144,7 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
 
       {/* Media Items Grid */}
       {media.length === 0 ? (
-        <div className="text-center py-6 text-slate-500 text-xs">
+        <div className="text-center py-6 text-[#8b93a1] text-xs">
           No media files uploaded yet. Click &quot;Upload Media&quot; to add video/audio files directly to IndexedDB.
         </div>
       ) : (
@@ -152,27 +152,27 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
           {media.map((item) => (
             <div
               key={item.id}
-              className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between text-xs space-y-2"
+              className="p-2.5 rounded-xl bg-[#0f1115] border border-[#262b33] hover:border-[#38414e] transition flex flex-col justify-between text-xs space-y-2"
             >
               <div className="flex items-start justify-between gap-1">
-                <span className="font-medium text-slate-200 truncate block" title={item.name}>
+                <span className="font-medium text-[#e6e8eb] truncate block" title={item.name}>
                   {item.name}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                <span className="text-[10px] text-[#8b93a1] font-mono shrink-0">
                   {item.duration.toFixed(1)}s
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <div className="flex items-center justify-between text-[11px] text-[#8b93a1]">
                 <span className="font-mono">{formatBytes(item.size)}</span>
-                <span className="text-[10px] text-slate-500 font-mono">id: {item.id.slice(0, 6)}</span>
+                <span className="text-[10px] text-[#8b93a1] font-mono">id: {item.id.slice(0, 6)}</span>
               </div>
 
-              <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/60">
+              <div className="flex items-center gap-1.5 pt-1 border-t border-[#262b33]">
                 <button
                   type="button"
                   onClick={() => handlePreview(item)}
-                  className="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition"
+                  className="px-2 py-1 text-[11px] bg-transparent hover:bg-[#202630] text-[#8b93a1] hover:text-[#e6e8eb] rounded border border-[#262b33] transition"
                 >
                   Play
                 </button>
@@ -181,7 +181,7 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
                     <button
                       type="button"
                       onClick={() => handleQuickInsert(item, 'V1')}
-                      className="px-2 py-1 text-[11px] bg-blue-900/60 hover:bg-blue-800 text-blue-300 rounded border border-blue-800/50 transition"
+                      className="px-2 py-1 text-[11px] bg-transparent hover:bg-[#202630] text-[#8b93a1] hover:text-[#e6e8eb] rounded border border-[#262b33] transition"
                       title="Insert to primary track V1"
                     >
                       + V1
@@ -189,7 +189,7 @@ export function MediaLibrary({ media, onMediaAdded, onInsertToTimeline }: MediaL
                     <button
                       type="button"
                       onClick={() => handleQuickInsert(item, 'V2')}
-                      className="px-2 py-1 text-[11px] bg-purple-900/60 hover:bg-purple-800 text-purple-300 rounded border border-purple-800/50 transition"
+                      className="px-2 py-1 text-[11px] bg-transparent hover:bg-[#202630] text-[#8b93a1] hover:text-[#e6e8eb] rounded border border-[#262b33] transition"
                       title="Insert to overlay track V2"
                     >
                       + V2

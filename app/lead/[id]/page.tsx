@@ -8,12 +8,13 @@ import { TimelineView } from '@/components/TimelineView';
 import { PlayerView } from '@/components/PlayerView';
 import { Dropzone } from '@/components/Dropzone';
 import { DiffViewer } from '@/components/DiffViewer';
+import { SnapshotHistoryPanel } from '@/components/SnapshotHistoryPanel';
 import { useProject } from '@/lib/sync';
 import { Clip, MediaItem, Snapshot, Timeline } from '@/lib/types';
-import { buildTimeline, buildPlaceholderSampleTimeline } from '@/lib/buildTimeline';
+import { buildTimeline } from '@/lib/buildTimeline';
 import { diffTimelines } from '@/lib/diff';
 import { hasTrackOverlaps, preventOverlaps } from '@/lib/vc';
-import { Sparkles, Upload, Plus, ExternalLink, X, FileSearch } from 'lucide-react';
+import { Upload, Plus, ExternalLink, X, FileSearch, GitMerge, AlertTriangle, Copy } from 'lucide-react';
 
 export default function LeadEditorPage() {
   const params = useParams();
@@ -23,7 +24,7 @@ export default function LeadEditorPage() {
 
   // Snapshot commit form state
   const [snapshotMsg, setSnapshotMsg] = useState('');
-  const [snapshotAuthor, setSnapshotAuthor] = useState('Lead Editor (Alex)');
+  const [snapshotAuthor, setSnapshotAuthor] = useState('Alex (Lead)');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
 
   // Playhead scrubber time shared between player and timeline
@@ -60,8 +61,8 @@ export default function LeadEditorPage() {
         const initialSnap: Snapshot = {
           id: prev.snapshots[0]?.id || `snap_${Date.now()}`,
           parentId: null,
-          author: snapshotAuthor || 'Lead Editor',
-          message: 'Initial assembly cut',
+          author: snapshotAuthor || 'Alex (Lead)',
+          message: 'Initial cut',
           createdAt: new Date().toISOString(),
           timeline: updatedTimeline,
         };
@@ -81,7 +82,7 @@ export default function LeadEditorPage() {
 
   // Handler to publish current working draft to Main as a new formal Snapshot (Commit)
   const handlePublishDraft = useCallback((customMsg?: string) => {
-    const commitMsg = (customMsg || snapshotMsg).trim() || `Cut update by ${snapshotAuthor || 'Lead Editor'}`;
+    const commitMsg = (customMsg || snapshotMsg).trim() || `Cut update by ${snapshotAuthor || 'Alex (Lead)'}`;
     setProject((prev) => {
       if (!prev) return prev;
       const currentLatest = prev.snapshots.length > 0
@@ -91,7 +92,7 @@ export default function LeadEditorPage() {
       const newSnapshot: Snapshot = {
         id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         parentId: currentLatest ? currentLatest.id : null,
-        author: snapshotAuthor.trim() || 'Lead Editor',
+        author: snapshotAuthor.trim() || 'Alex (Lead)',
         message: commitMsg,
         createdAt: new Date().toISOString(),
         timeline: JSON.parse(JSON.stringify(activeTimeline)),
@@ -191,9 +192,9 @@ export default function LeadEditorPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0d] flex items-center justify-center text-zinc-400">
+      <div className="min-h-screen bg-[#000000] flex items-center justify-center text-[#8e8e93]">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 border-2 border-[#5856d6] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-4 h-4 border-2 border-[#5b8def] border-t-transparent rounded-full animate-spin"></div>
           <span>Loading project...</span>
         </div>
       </div>
@@ -202,16 +203,16 @@ export default function LeadEditorPage() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-[#0a0a0d] text-zinc-100">
+      <div className="min-h-screen bg-[#000000] text-[#ffffff]">
         <Header role="Lead editor" />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
           <h2 className="text-xl font-bold text-white">Project Not Found</h2>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-[#8e8e93]">
             Could not find a project with ID &quot;{projectId}&quot; in local storage.
           </p>
           <Link
             href="/"
-            className="inline-block px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-full text-sm font-medium transition"
+            className="inline-block px-4 py-2 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] rounded-full text-sm font-semibold transition"
           >
             &larr; Return to Home
           </Link>
@@ -219,13 +220,6 @@ export default function LeadEditorPage() {
       </div>
     );
   }
-
-  // 'Load sample project' button: builds a timeline of 6 placeholder clips with no media (colored boxes only)
-  const handleLoadPlaceholderSample = () => {
-    const placeholderTimeline = buildPlaceholderSampleTimeline();
-    handleUpdateActiveTimeline(placeholderTimeline);
-    setPlayerTime(0);
-  };
 
   // Handler to create a formal new Snapshot (git commit)
   const handleCreateSnapshot = (e: React.FormEvent) => {
@@ -274,6 +268,12 @@ export default function LeadEditorPage() {
   const handleCombineVariation = (reviewId: string) => {
     const review = project.reviews.find((r) => r.id === reviewId);
     if (!review) return;
+
+    // Check if Main has moved forward since review was based (Merge Clash)
+    if (latestSnapshot && review.baseSnapshotId !== latestSnapshot.id) {
+      alert('Clash detected! Main has advanced past this review base snapshot. Collaborator must rebase before combining.');
+      return;
+    }
 
     const variation = project.variations.find((v) => v.id === review.variationId);
     if (!variation) return;
@@ -333,66 +333,64 @@ export default function LeadEditorPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0d] text-zinc-100">
+    <div className="min-h-screen flex flex-col bg-[#000000] text-[#ffffff]">
       <Header projectId={project.id} projectName={project.name} role="Lead editor" />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 space-y-6">
         {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131317] border border-[#22222a] rounded-2xl p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#121214] border border-[#222226] rounded-2xl p-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white">{project.name}</h1>
-              <span className="text-xs bg-[#5856d6]/20 text-[#a371f7] border border-[#5856d6]/40 px-2.5 py-0.5 rounded-full font-mono">
-                Project Lead Control
+              <h1 className="text-lg font-bold text-[#ffffff]">{project.name}</h1>
+              <span className="text-xs bg-[#1c1c20] text-[#8e8e93] border border-[#222226] px-2.5 py-0.5 rounded-full font-mono">
+                Lead
               </span>
             </div>
-            <p className="text-xs text-zinc-400 mt-1">
-              Active Head: <span className="font-mono text-zinc-300">{latestSnapshot?.id || 'none'}</span> &bull;{' '}
-              {latestSnapshot?.message || 'No snapshot'}
+            <p className="text-xs text-[#8e8e93] mt-1 flex items-center gap-1.5">
+              <span>Active Snapshot: <strong className="text-[#ffffff]">{latestSnapshot?.message || 'No snapshot'}</strong></span>
+              {latestSnapshot && (
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(latestSnapshot.id)}
+                  title={`Snapshot ID: ${latestSnapshot.id} (Click to copy)`}
+                  className="p-1 text-[#8e8e93] hover:text-[#ffffff] transition rounded"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              )}
             </p>
           </div>
 
           <div className="flex items-center flex-wrap gap-2">
-            {/* 'Load sample project' button: builds 6 placeholder clips with no media */}
-            <button
-              type="button"
-              onClick={handleLoadPlaceholderSample}
-              className="px-3.5 py-1.5 bg-[#6e40c9]/20 hover:bg-[#6e40c9]/30 text-[#a371f7] text-xs font-medium rounded-full transition border border-[#6e40c9]/40 shadow-sm flex items-center gap-1.5"
-              title="Build a timeline of 6 placeholder clips with no media (colored boxes only)"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Load 6-Clip Sample</span>
-            </button>
-
             {hasDraftChanges ? (
               <button
                 type="button"
                 onClick={() => handlePublishDraft()}
-                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold rounded-full transition shadow-md flex items-center gap-1.5"
-                title="Publish your current working draft to Main so collaborators can sync"
+                className="px-3.5 py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] text-xs font-semibold rounded-full transition flex items-center gap-1.5"
+                title="Publish your current working draft as a snapshot"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Publish Cut to Main</span>
+                <span>Create Snapshot</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
-                className="px-3.5 py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-medium rounded-full transition shadow-sm flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] text-xs font-semibold rounded-full transition flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Create Snapshot (Commit)</span>
+                <span>New Snapshot</span>
               </button>
             )}
 
             <Link
               href={`/join/${project.id}${project.variations.length === 0 ? '?new=1' : ''}`}
               target="_blank"
-              className="px-3.5 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-200 text-xs font-medium rounded-full transition border border-[#2a2a36] flex items-center gap-1.5"
-              title="Open Collaborator view in a new tab to create or edit variation branches"
+              className="px-3.5 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-full transition border border-[#222226] flex items-center gap-1.5"
+              title="Open Collaborator view in a new tab to create or edit variations"
             >
               <span>Open Collaborator in New Tab</span>
-              <ExternalLink className="w-3 h-3 text-zinc-400" />
+              <ExternalLink className="w-3 h-3 text-[#8e8e93]" />
             </Link>
           </div>
         </div>
@@ -401,14 +399,14 @@ export default function LeadEditorPage() {
         {isCreatingSnapshot && (
           <form
             onSubmit={handleCreateSnapshot}
-            className="p-4 bg-[#131317] border border-[#5856d6]/40 rounded-2xl space-y-3 text-xs"
+            className="p-4 bg-[#121214] border border-[#222226] rounded-2xl space-y-3 text-xs"
           >
-            <div className="flex items-center justify-between border-b border-[#22222a] pb-2">
-              <span className="font-semibold text-[#a371f7]">New Snapshot (Commit)</span>
+            <div className="flex items-center justify-between border-b border-[#222226] pb-2">
+              <span className="font-semibold text-[#ffffff]">New Snapshot</span>
               <button
                 type="button"
                 onClick={() => setIsCreatingSnapshot(false)}
-                className="text-zinc-400 hover:text-white flex items-center gap-1"
+                className="text-[#8e8e93] hover:text-[#ffffff] flex items-center gap-1"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Cancel</span>
@@ -416,30 +414,30 @@ export default function LeadEditorPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-zinc-400 mb-1">Author Name</label>
+                <label className="block text-[#8e8e93] mb-1">Author Name</label>
                 <input
                   type="text"
                   value={snapshotAuthor}
                   onChange={(e) => setSnapshotAuthor(e.target.value)}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#0071e3]"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2.5 py-1.5 text-[#ffffff] focus:outline-none focus:border-[#5b8def]"
                   required
                 />
               </div>
               <div>
-                <label className="block text-zinc-400 mb-1">Snapshot Message / Changelog</label>
+                <label className="block text-[#8e8e93] mb-1">Snapshot Message / Changelog</label>
                 <input
                   type="text"
                   placeholder="e.g. Cut opening drone shot to 4s and color graded"
                   value={snapshotMsg}
                   onChange={(e) => setSnapshotMsg(e.target.value)}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#0071e3]"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2.5 py-1.5 text-[#ffffff] focus:outline-none focus:border-[#5b8def]"
                   required
                 />
               </div>
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium rounded-full transition shadow-sm"
+              className="px-4 py-2 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] font-semibold rounded-full transition"
             >
               Save Snapshot
             </button>
@@ -449,13 +447,13 @@ export default function LeadEditorPage() {
         {/* Live Preview Player View */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-bold text-[#ffffff] uppercase tracking-wider flex items-center gap-2">
               <span>Preview Player</span>
-              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-[#1c1c20] text-[#8e8e93] border border-[#222226] px-2 py-0.5 rounded font-mono">
                 V1 Video + A1 Audio + Gaps
               </span>
             </h2>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-[#8e8e93]">
               Plays V1 clips, A1 audio elements, and shows black frame in gaps
             </span>
           </div>
@@ -470,60 +468,56 @@ export default function LeadEditorPage() {
         {/* Master Timeline View */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span>Lead Master Timeline (Head)</span>
+            <h2 className="text-sm font-bold text-[#ffffff] uppercase tracking-wider flex items-center gap-2">
+              <span>Lead Master Timeline</span>
               {hasDraftChanges ? (
-                <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full font-mono font-semibold">
+                <span className="text-[10px] bg-[#1c1c20] text-[#8e8e93] border border-[#222226] px-2 py-0.5 rounded-full font-mono font-medium">
                   Unpublished Draft
                 </span>
               ) : (
-                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full font-mono font-semibold">
+                <span className="text-[10px] bg-[#1c1c20] text-[#8e8e93] border border-[#222226] px-2 py-0.5 rounded-full font-mono font-medium">
                   Clean Milestone
                 </span>
               )}
             </h2>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-[#8e8e93]">
               Directly editable &bull; Private draft until published to Main
             </span>
           </div>
 
           {/* Working Tree / Branch Status Bar */}
           <div
-            className={`rounded-2xl border p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
-              hasDraftChanges
-                ? 'bg-amber-950/20 border-amber-500/50 shadow-lg text-amber-200'
-                : 'bg-[#131317] border border-[#22222a] text-zinc-400'
-            }`}
+            className="rounded-2xl border border-[#222226] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition bg-[#121214]"
           >
             <div className="flex items-center gap-2.5">
               <span
-                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                  hasDraftChanges ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  hasDraftChanges ? 'bg-[#c9973a]' : 'bg-[#8e8e93]'
                 }`}
               />
               <div>
                 {hasDraftChanges ? (
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-amber-300">Working Draft: Unpublished Changes</span>
-                      <span className="font-mono bg-amber-900/60 px-2 py-0.5 rounded-full text-[11px] text-amber-200">
+                      <span className="font-semibold text-[#ffffff]">Working Draft: Unpublished Changes</span>
+                      <span className="font-mono bg-[#c9973a]/12 px-2 py-0.5 rounded-full text-[11px] text-[#c9973a]">
                         +{draftDiff?.addedCount} added &bull; ~{draftDiff?.modifiedCount} modified &bull; -{draftDiff?.removedCount} removed
                       </span>
                     </div>
-                    <p className="text-[11px] text-amber-300/80">
+                    <p className="text-[11px] text-[#8e8e93]">
                       These edits stay in your private draft. Collaborators won&apos;t be interrupted until you publish.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-zinc-300">Clean Master Cut (HEAD)</span>
-                      <span className="font-mono text-zinc-500 text-[11px]">
+                      <span className="font-semibold text-[#ffffff]">Clean Master Cut</span>
+                      <span className="font-mono text-[#8e8e93] text-[11px]">
                         Snapshot #{project.snapshots.length}: &ldquo;{latestSnapshot?.message || 'Initial'}&rdquo;
                       </span>
                     </div>
-                    <p className="text-[11px] text-zinc-500">
-                      Edit freely below. Edits remain private drafts until you click &ldquo;Publish Cut to Main&rdquo;.
+                    <p className="text-[11px] text-[#8e8e93]">
+                      Edit freely below. Edits remain private drafts until you click &ldquo;Create Snapshot&rdquo;.
                     </p>
                   </div>
                 )}
@@ -535,14 +529,14 @@ export default function LeadEditorPage() {
                 <button
                   type="button"
                   onClick={() => setShowDraftDiff(!showDraftDiff)}
-                  className="px-3 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-200 font-medium rounded-full border border-[#2a2a36] transition"
+                  className="px-3 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] font-medium rounded-full border border-[#222226] transition"
                 >
                   {showDraftDiff ? 'Hide Draft Diff' : 'Inspect Changes'}
                 </button>
                 <button
                   type="button"
                   onClick={handleDiscardDraft}
-                  className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-medium rounded-full border border-rose-800/60 transition"
+                  className="px-3 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#c9605f] hover:text-[#ffffff] font-medium rounded-full border border-[#222226] transition"
                   title="Discard all uncommitted draft edits and revert to the latest snapshot"
                 >
                   Discard Draft
@@ -550,11 +544,11 @@ export default function LeadEditorPage() {
                 <button
                   type="button"
                   onClick={() => handlePublishDraft()}
-                  className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full shadow-md transition flex items-center gap-1.5"
-                  title="Push changes to Main (Snapshot) so collaborators can sync"
+                  className="px-3.5 py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] font-semibold rounded-full transition flex items-center gap-1.5"
+                  title="Create a new snapshot so collaborators can sync"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Push Cut to Main</span>
+                  <span>Create Snapshot</span>
                 </button>
               </div>
             )}
@@ -562,15 +556,15 @@ export default function LeadEditorPage() {
 
           {/* Optional Draft Diff Viewer */}
           {hasDraftChanges && showDraftDiff && latestSnapshot && project?.masterDraft && (
-            <div className="bg-[#131317] border border-amber-600/50 rounded-2xl p-4 space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-[#22222a]">
-                <span className="font-bold text-amber-300 text-xs">
+            <div className="bg-[#121214] border border-[#222226] rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-[#222226]">
+                <span className="font-medium text-[#ffffff] text-xs">
                   Diff: Latest Snapshot ({latestSnapshot.id.slice(0, 10)}) &rarr; Current Working Draft
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowDraftDiff(false)}
-                  className="text-zinc-400 hover:text-white text-xs flex items-center gap-1"
+                  className="text-[#8e8e93] hover:text-[#ffffff] text-xs flex items-center gap-1"
                 >
                   <X className="w-3.5 h-3.5" />
                   <span>Close</span>
@@ -605,23 +599,23 @@ export default function LeadEditorPage() {
         </section>
 
         {/* Review Requests & Variations from Collaborators */}
-        <section className="bg-[#131317] border border-[#22222a] rounded-2xl p-5 shadow-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
+        <section className="bg-[#121214] border border-[#222226] rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#222226]">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-[#ffffff] flex items-center gap-2">
                 <span>Incoming Review Requests</span>
-                <span className="text-xs bg-amber-950/60 text-amber-300 border border-amber-600/60 px-2.5 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-[#1c1c20] text-[#8e8e93] border border-[#222226] px-2.5 py-0.5 rounded-full font-mono">
                   {project.reviews.filter((r) => r.status === 'open').length} Open
                 </span>
               </h2>
-              <p className="text-xs text-zinc-400">
-                Review, inspect timeline diffs, and combine/merge variations proposed by collaborators
+              <p className="text-xs text-[#8e8e93]">
+                Review, inspect timeline diffs, and combine variations proposed by collaborators
               </p>
             </div>
           </div>
 
           {project.reviews.length === 0 ? (
-            <div className="text-center py-6 text-zinc-500 text-xs">
+            <div className="text-center py-6 text-[#8e8e93] text-xs">
               No review requests submitted yet. Open the collaborator link in another tab to submit one!
             </div>
           ) : (
@@ -636,42 +630,39 @@ export default function LeadEditorPage() {
                     ? activeTimeline
                     : latestSnapshot?.timeline || { clips: [] };
                 const isSelected = selectedReviewId === rev.id;
+                const revClash = Boolean(latestSnapshot && rev.status === 'open' && rev.baseSnapshotId !== latestSnapshot.id);
 
                 return (
                   <div
                     key={rev.id}
-                    className={`rounded-xl border p-4 transition ${rev.status === 'open'
-                      ? 'bg-[#18181f] border-amber-500/40 shadow-md'
-                      : rev.status === 'combined'
-                        ? 'bg-[#18181f]/60 border-emerald-800/40 opacity-80'
-                        : 'bg-[#18181f]/40 border-[#262632]'
-                      }`}
+                    className="rounded-xl border border-[#222226] p-4 transition bg-[#121214]"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-200 text-sm">
+                          <span className="font-semibold text-[#ffffff] text-sm">
                             {variation?.name || 'Variation'}
                           </span>
                           <span
-                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${rev.status === 'open'
-                              ? 'bg-amber-950 text-amber-300 border border-amber-700/60'
-                              : rev.status === 'combined'
-                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
-                                : 'bg-rose-950 text-rose-300 border border-rose-700/60'
-                              }`}
+                            className="text-[10px] font-medium uppercase px-2 py-0.5 rounded-full bg-[#1c1c20] text-[#8e8e93] border border-[#222226]"
                           >
                             {rev.status}
                           </span>
+                          {revClash && (
+                            <span className="text-[10px] font-medium bg-[#c9973a]/12 text-[#c9973a] px-2.5 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                              <AlertTriangle className="w-3 h-3 text-[#c9973a]" />
+                              <span>Clash Detected (Rebase Needed)</span>
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-300">{rev.message}</p>
-                        <div className="text-[11px] text-slate-500">
-                          Author: <span className="text-slate-400">{variation?.author || 'Collaborator'}</span> &bull;{' '}
-                          Base: <span className="font-mono text-slate-400">{rev.baseSnapshotId.slice(0, 10)}</span>
+                        <p className="text-xs text-[#8e8e93]">{rev.message}</p>
+                        <div className="text-[11px] text-[#8e8e93]">
+                          Author: <span className="text-[#ffffff]">{variation?.author || 'Collaborator'}</span> &bull;{' '}
+                          Base: <span title={`Snapshot ID: ${rev.baseSnapshotId}`} className="text-[#ffffff] font-medium">{project.snapshots.find((s) => s.id === rev.baseSnapshotId)?.message || 'Snapshot'}</span>
                         </div>
                         {rev.note && (
-                          <div className="mt-1 p-2 bg-rose-950/30 border border-rose-900/50 rounded text-xs text-rose-300">
-                            <strong>Feedback:</strong> {rev.note}
+                          <div className="mt-1 p-2 bg-[#000000] border border-[#222226] rounded text-xs text-[#8e8e93]">
+                            <strong className="text-[#ffffff]">Feedback:</strong> {rev.note}
                           </div>
                         )}
                       </div>
@@ -679,10 +670,10 @@ export default function LeadEditorPage() {
                       <div className="flex items-center space-x-2 shrink-0">
                         <Link
                           href={`/lead/${projectId}/review/${rev.id}`}
-                          className="px-2.5 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 hover:text-white text-xs font-semibold rounded border border-indigo-700/60 transition flex items-center gap-1.5"
+                          className="px-2.5 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded border border-[#222226] transition flex items-center gap-1.5"
                           title="Open dedicated review page with Ghost Timeline"
                         >
-                          <FileSearch className="w-3.5 h-3.5" />
+                          <FileSearch className="w-3.5 h-3.5 text-[#8e8e93]" />
                           <span>Review Page</span>
                           <span>&rarr;</span>
                         </Link>
@@ -690,7 +681,7 @@ export default function LeadEditorPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedReviewId(isSelected ? null : rev.id)}
-                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded border border-slate-700 transition"
+                          className="px-2.5 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs rounded border border-[#222226] transition"
                         >
                           {isSelected ? 'Hide Quick Diff' : 'Quick Diff'}
                         </button>
@@ -700,14 +691,21 @@ export default function LeadEditorPage() {
                             <button
                               type="button"
                               onClick={() => handleCombineVariation(rev.id)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded transition shadow-sm"
+                              disabled={revClash}
+                              className={`px-3 py-1.5 text-xs font-medium rounded transition flex items-center gap-1.5 border border-[#222226] ${
+                                revClash
+                                    ? 'bg-transparent text-[#8e8e93]/40 border-[#222226]/40 cursor-not-allowed'
+                                    : 'bg-transparent hover:bg-[#1a1a1e] text-[#ffffff]'
+                              }`}
+                              title={revClash ? 'Clash detected. Master cut moved forward. Collaborator must sync first.' : 'Combine variation'}
                             >
-                              Combine &amp; Merge
+                              <GitMerge className="w-3.5 h-3.5 text-[#8e8e93]" />
+                              <span>Combine</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => setActiveReviewAction(activeReviewAction === rev.id ? null : rev.id)}
-                              className="px-3 py-1.5 bg-rose-900/70 hover:bg-rose-800 text-rose-200 text-xs font-semibold rounded border border-rose-700/50 transition"
+                              className="px-3 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#c9605f] text-xs font-medium rounded border border-[#222226] transition"
                             >
                               Request Changes
                             </button>
@@ -718,8 +716,8 @@ export default function LeadEditorPage() {
 
                     {/* Request changes note input */}
                     {activeReviewAction === rev.id && (
-                      <div className="mt-3 p-3 bg-slate-900 rounded-lg border border-rose-800/60 space-y-2">
-                        <label className="block text-xs text-rose-300 font-medium">
+                      <div className="mt-3 p-3 bg-[#000000] rounded-lg border border-[#222226] space-y-2">
+                        <label className="block text-xs text-[#8e8e93] font-medium">
                           Notes / Changes Required for Collaborator:
                         </label>
                         <input
@@ -727,20 +725,20 @@ export default function LeadEditorPage() {
                           value={requestChangeNote}
                           onChange={(e) => setRequestChangeNote(e.target.value)}
                           placeholder="e.g., Shorten clip 2 by 0.5s and move to V2..."
-                          className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white"
+                          className="w-full bg-[#121214] border border-[#222226] rounded px-2.5 py-1.5 text-xs text-[#ffffff]"
                         />
                         <div className="flex justify-end space-x-2">
                           <button
                             type="button"
                             onClick={() => setActiveReviewAction(null)}
-                            className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                            className="px-2.5 py-1 text-xs text-[#8e8e93] hover:text-[#ffffff]"
                           >
                             Cancel
                           </button>
                           <button
                             type="button"
                             onClick={() => handleRequestChanges(rev.id)}
-                            className="px-3 py-1 bg-rose-700 hover:bg-rose-600 text-white text-xs font-semibold rounded"
+                            className="px-3 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#c9605f] border border-[#222226] text-xs font-semibold rounded"
                           >
                             Send Feedback
                           </button>
@@ -750,12 +748,12 @@ export default function LeadEditorPage() {
 
                     {/* Diff Preview when opened */}
                     {isSelected && variation && (
-                      <div className="mt-4 pt-3 border-t border-slate-800 space-y-3">
+                      <div className="mt-4 pt-3 border-t border-[#222226] space-y-3">
                         <div className="flex items-center justify-between text-xs pb-1">
-                          <span className="text-slate-400 font-medium">
+                          <span className="text-[#8e8e93] font-medium">
                             Comparing proposed changes against:
                           </span>
-                          <span className="text-[11px] font-mono text-cyan-300 bg-slate-900 border border-slate-700 px-2 py-0.5 rounded">
+                          <span className="text-[11px] font-mono text-[#ffffff] bg-[#1c1c20] border border-[#222226] px-2 py-0.5 rounded">
                             {baseSnap && baseSnap.timeline.clips.length > 0
                               ? `Base Snapshot: ${baseSnap.message} (${baseSnap.id.slice(0, 8)})`
                               : 'Current Master Timeline (HEAD)'}
@@ -766,7 +764,7 @@ export default function LeadEditorPage() {
                           variationTimeline={variation.timeline}
                         />
                         <div className="pt-2">
-                          <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                          <span className="text-[11px] font-semibold text-[#8e8e93] block mb-1">
                             Variation Timeline Preview ({variation.timeline.clips.length} clips):
                           </span>
                           <TimelineView
@@ -785,51 +783,10 @@ export default function LeadEditorPage() {
         </section>
 
         {/* Snapshots Log (Commit History) */}
-        <section className="bg-[#131317] border border-[#22222a] rounded-2xl p-5 shadow-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#22222a]">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <span>Snapshots History</span>
-              <span className="text-xs bg-[#1f1f28] text-zinc-400 border border-[#2a2a36] px-2.5 py-0.5 rounded-full font-mono">
-                {project.snapshots.length}
-              </span>
-            </h2>
-            <span className="text-xs text-zinc-500">Immutable Timeline Checkpoints</span>
-          </div>
-
-          <div className="space-y-3">
-            {[...project.snapshots].reverse().map((snap, idx) => (
-              <div
-                key={snap.id}
-                className="p-3 bg-[#18181f] rounded-xl border border-[#242430] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-[#323242] transition"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0071e3]"></span>
-                    <span className="font-semibold text-zinc-100 text-xs sm:text-sm">
-                      {snap.message}
-                    </span>
-                    {idx === 0 && (
-                      <span className="text-[10px] bg-[#0071e3]/20 text-[#0071e3] border border-[#0071e3]/40 px-2 py-0.5 rounded-full font-mono">
-                        HEAD
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-zinc-500 flex items-center gap-3">
-                    <span>by <strong className="text-zinc-300">{snap.author}</strong></span>
-                    <span>&bull;</span>
-                    <span className="font-mono text-zinc-500">id: {snap.id.slice(0, 14)}</span>
-                    <span>&bull;</span>
-                    <span>{new Date(snap.createdAt).toLocaleTimeString()}</span>
-                  </div>
-                </div>
-
-                <div className="text-xs font-mono text-zinc-400 shrink-0">
-                  {snap.timeline.clips.length} clip{snap.timeline.clips.length !== 1 ? 's' : ''}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <SnapshotHistoryPanel
+          snapshots={project.snapshots}
+          readOnly={false}
+        />
       </main>
     </div>
   );

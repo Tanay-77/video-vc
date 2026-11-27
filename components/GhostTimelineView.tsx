@@ -12,10 +12,10 @@ interface GhostTimelineViewProps {
 }
 
 const TRACKS: { id: TrackType; label: string; desc: string; bg: string; border: string }[] = [
-  { id: 'V2', label: 'V2', desc: 'Overlay / B-Roll', bg: 'bg-[#101014]', border: 'border-[#1f1f26]' },
-  { id: 'V1', label: 'V1', desc: 'Primary Video', bg: 'bg-[#131317]', border: 'border-[#1f1f26]' },
-  { id: 'A1', label: 'A1', desc: 'Audio', bg: 'bg-[#0e0e12]', border: 'border-[#1f1f26]' },
-  { id: 'CC', label: 'CC', desc: 'Color / Captions', bg: 'bg-[#101014]', border: 'border-[#1f1f26]' },
+  { id: 'V2', label: 'V2', desc: 'Overlay / B-Roll', bg: 'bg-[#000000]', border: 'border-[#222226]' },
+  { id: 'V1', label: 'V1', desc: 'Primary Video', bg: 'bg-[#000000]', border: 'border-[#222226]' },
+  { id: 'A1', label: 'A1', desc: 'Audio', bg: 'bg-[#000000]', border: 'border-[#222226]' },
+  { id: 'CC', label: 'CC', desc: 'Color / Captions', bg: 'bg-[#000000]', border: 'border-[#222226]' },
 ];
 
 const TRACK_HEIGHT = 58;
@@ -189,51 +189,47 @@ export function GhostTimelineView({
   };
 
   return (
-    <div className="bg-[#131317] border border-[#22222a] rounded-2xl overflow-hidden shadow-xl">
+    <div className="bg-[#121214] border border-[#222226] rounded-2xl overflow-hidden">
       {/* Ghost Timeline Top Toolbar & Legend */}
-      <div className="p-3 bg-[#0d0d10] border-b border-[#22222a] flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-[#121214] border-b border-[#222226] flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 text-[11px]">
-          <span className="text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+          <span className="text-[#8e8e93] font-semibold uppercase tracking-wider text-[10px]">
             Ghost Visualizer:
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-emerald-600 border border-emerald-400"></span>
-            <span className="text-emerald-300 font-medium">+ Added Clip</span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#4aa56b]/20 border border-[#4aa56b]/60"></span>
+            <span className="text-[#4aa56b] font-medium">+ Added Clip</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-rose-950/40 border border-dashed border-rose-500"></span>
-            <span className="text-rose-300 font-medium">- Removed Clip (Ghost)</span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#c9605f]/15 border border-dashed border-[#c9605f]/60"></span>
+            <span className="text-[#c9605f] font-medium">- Removed Clip</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-rose-950/60 border border-dashed border-rose-400"></span>
-            <span className="text-rose-400 font-medium">Trimmed Tail (Ghost)</span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#c9973a]/20 border border-[#c9973a]/60"></span>
+            <span className="text-[#c9973a] font-medium">~ Modified Cut</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-amber-600 border border-amber-300"></span>
-            <span className="text-amber-300 font-medium">~ Trimmed Cut</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-zinc-800 border border-zinc-700"></span>
-            <span className="text-zinc-400">Unchanged Clip</span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#1e2330] border border-[#2e374d]"></span>
+            <span className="text-[#8e8e93]">Unchanged</span>
           </div>
         </div>
 
         {/* Zoom Controls */}
-        <div className="flex items-center space-x-1.5 bg-[#18181f] border border-[#242430] rounded-full p-0.5">
+        <div className="flex items-center space-x-1.5 bg-[#1c1c20] border border-[#222226] rounded-full p-0.5">
           <button
             type="button"
             onClick={() => setPxPerSec((prev) => Math.max(20, prev - 10))}
-            className="px-2 py-0.5 text-xs text-zinc-300 hover:text-white rounded-full hover:bg-[#242430]"
+            className="px-2 py-0.5 text-xs text-[#8e8e93] hover:text-[#ffffff] rounded-full hover:bg-[#222226]"
             title="Zoom out"
           >
             &minus;
           </button>
-          <span className="font-mono text-[11px] text-zinc-400 px-1">{pxPerSec}px/s</span>
+          <span className="font-mono text-[11px] text-[#8e8e93] px-1">{pxPerSec}px/s</span>
           <button
             type="button"
             onClick={() => setPxPerSec((prev) => Math.min(90, prev + 10))}
-            className="px-2 py-0.5 text-xs text-zinc-300 hover:text-white rounded-full hover:bg-[#242430]"
+            className="px-2 py-0.5 text-xs text-[#8e8e93] hover:text-[#ffffff] rounded-full hover:bg-[#222226]"
             title="Zoom in"
           >
             &#43;
@@ -250,31 +246,34 @@ export function GhostTimelineView({
       >
         <div style={{ width: `${timelineWidth + 90}px` }} className="relative pb-4">
           {/* Time Ruler */}
-          <div className="h-7 bg-[#0d0d10] border-b border-[#22222a] flex relative ml-20 text-[10px] font-mono text-zinc-400">
+          <div className="h-7 bg-[#000000] border-b border-[#222226] flex items-center relative text-[10px] font-mono text-[#8e8e93]">
+            <div className="sticky left-0 z-40 shrink-0 w-20 h-full bg-[#121214] border-r border-[#222226] flex items-center px-2 text-[10px] text-[#8e8e93] uppercase font-semibold shadow-[2px_0_6px_rgba(0,0,0,0.5)]">
+              Time (s)
+            </div>
             {rulerTicks.map((tick) => (
               <div
                 key={`tick-${tick.time}`}
                 className="absolute top-0 bottom-0 flex flex-col justify-between"
-                style={{ left: `${tick.time * pxPerSec}px` }}
+                style={{ left: `${80 + tick.time * pxPerSec}px` }}
               >
                 <span className="px-1">{tick.label}</span>
                 <span
-                  className={`w-px bg-zinc-700 ${
-                    tick.isMajor ? 'h-3 bg-zinc-500' : 'h-1.5 bg-zinc-800'
+                  className={`w-px ${
+                    tick.isMajor ? 'h-3 bg-[#3a3a40]' : 'h-1.5 bg-[#222226]'
                   }`}
                 ></span>
               </div>
             ))}
           </div>
 
-          {/* Pure White Apple Playhead marker */}
+          {/* Playhead marker - White Final Cut Pro style */}
           {time !== undefined && (
             <div
               className="absolute top-0 bottom-0 z-30 pointer-events-none transition-all duration-75"
               style={{ left: `${time * pxPerSec + 80}px` }}
             >
-              <div className="w-[1.5px] h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]"></div>
-              <div className="w-3 h-3 bg-white rotate-45 -ml-[5px] -mt-1 shadow-sm border border-white/80"></div>
+              <div className="w-[1.5px] h-full bg-white"></div>
+              <div className="w-3 h-3 bg-white rotate-45 -ml-[5px] -mt-1 border border-white"></div>
             </div>
           )}
 
@@ -287,22 +286,22 @@ export function GhostTimelineView({
                 <div key={track.id} className="flex items-center relative group">
                   {/* Track Header Label */}
                   <div
-                    className={`w-20 shrink-0 h-[58px] ${track.bg} border-r border-y ${track.border} flex flex-col justify-center px-2 z-10 sticky left-0 shadow-sm`}
+                    className={`w-20 shrink-0 h-[58px] bg-[#121214] border-r border-y border-[#222226] flex flex-col justify-center px-2 z-40 sticky left-0 shadow-[2px_0_6px_rgba(0,0,0,0.5)]`}
                   >
-                    <span className="font-bold text-xs text-white tracking-wide">{track.label}</span>
-                    <span className="text-[9px] text-zinc-400 truncate">{track.desc}</span>
+                    <span className="font-bold text-xs text-[#ffffff] tracking-wide">{track.label}</span>
+                    <span className="text-[9px] text-[#8e8e93] truncate">{track.desc}</span>
                   </div>
 
                   {/* Track Lane Content */}
                   <div
-                    className={`flex-1 h-[58px] ${track.bg} border-y ${track.border} relative overflow-hidden`}
+                    className={`flex-1 h-[58px] bg-[#000000] border-y border-[#222226] relative overflow-hidden`}
                     style={{ width: `${timelineWidth}px` }}
                   >
                     {/* Background grid lines */}
                     {rulerTicks.map((tick) => (
                       <div
                         key={`grid-${track.id}-${tick.time}`}
-                        className="absolute top-0 bottom-0 w-px bg-slate-800/30 pointer-events-none"
+                        className="absolute top-0 bottom-0 w-px bg-[#222226]/40 pointer-events-none"
                         style={{ left: `${tick.time * pxPerSec}px` }}
                       ></div>
                     ))}
@@ -316,25 +315,25 @@ export function GhostTimelineView({
                       let styleClasses = '';
                       if (block.type === 'unchanged') {
                         styleClasses =
-                          'bg-slate-800/80 border border-slate-700/80 text-slate-300 hover:border-slate-500';
+                          'bg-[#1e2330] border border-[#2e374d] text-[#ffffff]';
                       } else if (block.type === 'added') {
                         styleClasses =
-                          'bg-emerald-600/90 border-2 border-emerald-400 text-white font-semibold shadow-lg shadow-emerald-950/50';
+                          'bg-[#4aa56b]/20 border border-[#4aa56b]/50 text-[#ffffff] font-semibold';
                       } else if (block.type === 'removed') {
                         styleClasses =
-                          'bg-rose-950/40 border-2 border-dashed border-rose-500 text-rose-300 opacity-80';
+                          'bg-[#c9605f]/15 border border-dashed border-[#c9605f]/50 text-[#c9605f]';
                       } else if (block.type === 'modified-active') {
                         styleClasses =
-                          'bg-amber-600/90 border-2 border-amber-300 text-white font-semibold shadow-md';
+                          'bg-[#c9973a]/20 border border-[#c9973a]/50 text-[#ffffff] font-semibold';
                       } else if (block.type === 'trimmed-tail') {
                         styleClasses =
-                          'bg-rose-950/50 border-2 border-dashed border-rose-500/90 text-rose-300 animate-pulse';
+                          'bg-[#c9605f]/15 border border-dashed border-[#c9605f]/50 text-[#c9605f]';
                       } else if (block.type === 'trimmed-head') {
                         styleClasses =
-                          'bg-rose-950/50 border-2 border-dashed border-rose-500/90 text-rose-300';
+                          'bg-[#c9605f]/15 border border-dashed border-[#c9605f]/50 text-[#c9605f]';
                       } else if (block.type === 'moved-prev') {
                         styleClasses =
-                          'bg-slate-900/60 border-2 border-dashed border-slate-600 text-slate-400 opacity-70';
+                          'bg-[#222226]/60 border border-dashed border-[#3a3a40] text-[#8e8e93]';
                       }
 
                       return (
@@ -349,19 +348,19 @@ export function GhostTimelineView({
                         >
                           <div className="flex items-center gap-1.5 truncate">
                             {block.badge && (
-                              <span className="text-[9px] font-mono px-1 py-0.2 rounded uppercase font-bold bg-black/40 shrink-0">
+                              <span className="text-[9px] font-mono px-1 py-0.2 rounded uppercase font-bold bg-[#000000]/60 text-[#8e8e93] shrink-0">
                                 {block.badge}
                               </span>
                             )}
                             <span
                               className={`truncate font-medium text-[11px] ${
-                                block.type === 'removed' ? 'line-through text-rose-200' : ''
+                                block.type === 'removed' ? 'line-through text-[#c9605f]' : ''
                               }`}
                             >
                               {block.name}
                             </span>
                           </div>
-                          <div className="text-[9px] opacity-80 font-mono truncate">
+                          <div className="text-[9px] opacity-80 font-mono truncate text-[#8e8e93]">
                             {block.start.toFixed(1)}s &ndash; {(block.start + block.dur).toFixed(1)}s ({block.dur.toFixed(1)}s)
                           </div>
                         </div>

@@ -55,31 +55,31 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
   const { addedCount, removedCount, modifiedCount } = diffResult;
 
   return (
-    <div className="bg-[#131317] border border-[#22222a] rounded-2xl p-4 text-xs space-y-3">
+    <div className="bg-[#121214] border border-[#222226] rounded-2xl p-4 text-xs space-y-3">
       {/* Diff Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#22222a] text-[11px]">
+      <div className="flex items-center justify-between pb-3 border-b border-[#222226] text-[11px]">
         <div className="flex items-center space-x-2">
-          <span className="font-semibold text-zinc-200">Timeline Diff</span>
+          <span className="font-semibold text-[#ffffff]">Timeline Diff</span>
           <div className="flex items-center space-x-1.5 font-mono text-[10px]">
-            <span className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/60">
+            <span className="text-[#4aa56b] bg-[#4aa56b]/12 px-2 py-0.5 rounded-full">
               +{addedCount} added
             </span>
-            <span className="text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-800/60">
+            <span className="text-[#c9973a] bg-[#c9973a]/12 px-2 py-0.5 rounded-full">
               ~{modifiedCount} modified
             </span>
-            <span className="text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-800/60">
+            <span className="text-[#c9605f] bg-[#c9605f]/12 px-2 py-0.5 rounded-full">
               -{removedCount} removed
             </span>
           </div>
         </div>
 
         {/* View mode toggle */}
-        <div className="flex items-center bg-[#0d0d10] rounded-full p-0.5 border border-[#22222a] text-[10px]">
+        <div className="flex items-center bg-[#000000] rounded-full p-0.5 border border-[#222226] text-[10px]">
           <button
             type="button"
             onClick={() => setViewMode('cards')}
             className={`px-3 py-1 rounded-full transition flex items-center gap-1 ${
-              viewMode === 'cards' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
+              viewMode === 'cards' ? 'bg-[#5b8def] text-[#000000] font-semibold' : 'text-[#8e8e93] hover:text-[#ffffff]'
             }`}
           >
             <LayoutList className="w-3 h-3" />
@@ -89,7 +89,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
             type="button"
             onClick={() => setViewMode('ghost')}
             className={`px-3 py-1 rounded-full transition flex items-center gap-1 ${
-              viewMode === 'ghost' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
+              viewMode === 'ghost' ? 'bg-[#5b8def] text-[#000000] font-semibold' : 'text-[#8e8e93] hover:text-[#ffffff]'
             }`}
           >
             <Layers className="w-3 h-3" />
@@ -99,7 +99,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
             type="button"
             onClick={() => setViewMode('git')}
             className={`px-3 py-1 rounded-full transition font-mono flex items-center gap-1 ${
-              viewMode === 'git' ? 'bg-[#0071e3] text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white'
+              viewMode === 'git' ? 'bg-[#5b8def] text-[#000000] font-semibold' : 'text-[#8e8e93] hover:text-[#ffffff]'
             }`}
           >
             <FileText className="w-3 h-3" />
@@ -110,13 +110,13 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
 
       {/* Summary Bullet Points */}
       {summaryLines.length > 0 && summaryLines[0] !== 'No changes detected.' && (
-        <div className="p-3 bg-[#18181f] rounded-xl border border-[#262632] space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+        <div className="p-3 bg-[#121214] rounded-xl border border-[#222226] space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#8e8e93] block mb-1">
             Change Summary (Biggest First):
           </span>
           {summaryLines.map((line, i) => (
-            <div key={i} className="text-[11px] text-zinc-300 flex items-start gap-1.5">
-              <span className="text-[#0071e3] font-bold">&bull;</span>
+            <div key={i} className="text-[11px] text-[#ffffff] flex items-start gap-1.5">
+              <span className="text-[#8e8e93] font-bold">&bull;</span>
               <span>{line}</span>
             </div>
           ))}
@@ -133,16 +133,16 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-800/40 text-emerald-300 flex items-center justify-between"
+                    className="p-2.5 rounded-xl bg-[#121214] border border-[#222226] flex items-center justify-between"
                   >
                     <div>
-                      <span className="font-bold mr-1.5 text-xs">[+ ADD]</span>
-                      <span className="font-semibold text-white">{d.after.name}</span>
-                      <span className="text-[10px] ml-2 text-emerald-400 font-mono">
+                      <span className="font-mono text-[10px] font-medium mr-1.5 bg-[#4aa56b]/12 text-[#4aa56b] px-1.5 py-0.5 rounded">[+ ADD]</span>
+                      <span className="font-medium text-[#ffffff]">{d.after.name}</span>
+                      <span className="text-[10px] ml-2 text-[#8e8e93] font-mono">
                         ({d.after.track} &bull; {d.after.start.toFixed(1)}s &ndash; {(d.after.start + d.after.dur).toFixed(1)}s)
                       </span>
                     </div>
-                    <span className="font-mono text-[10px]">{d.after.dur.toFixed(1)}s</span>
+                    <span className="font-mono text-[10px] text-[#8e8e93]">{d.after.dur.toFixed(1)}s</span>
                   </div>
                 );
               }
@@ -151,16 +151,16 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2.5 rounded-xl bg-rose-950/25 border border-rose-800/40 text-rose-300 flex items-center justify-between"
+                    className="p-2.5 rounded-xl bg-[#121214] border border-[#222226] flex items-center justify-between"
                   >
                     <div>
-                      <span className="font-bold mr-1.5 text-xs">[- DEL]</span>
-                      <span className="font-semibold line-through text-zinc-300">{d.before.name}</span>
-                      <span className="text-[10px] ml-2 text-rose-400 font-mono">
+                      <span className="font-mono text-[10px] font-medium mr-1.5 bg-[#c9605f]/12 text-[#c9605f] px-1.5 py-0.5 rounded">[- DEL]</span>
+                      <span className="font-medium line-through text-[#8e8e93]">{d.before.name}</span>
+                      <span className="text-[10px] ml-2 text-[#8e8e93] font-mono">
                         ({d.before.track} &bull; {d.before.start.toFixed(1)}s)
                       </span>
                     </div>
-                    <span className="font-mono text-[10px]">{d.before.dur.toFixed(1)}s</span>
+                    <span className="font-mono text-[10px] text-[#8e8e93]">{d.before.dur.toFixed(1)}s</span>
                   </div>
                 );
               }
@@ -169,13 +169,13 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                 return (
                   <div
                     key={`diff-${idx}`}
-                    className="p-2.5 rounded-xl bg-amber-950/25 border border-amber-800/40 text-amber-300 space-y-1"
+                    className="p-2.5 rounded-xl bg-[#121214] border border-[#222226] space-y-1"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs">[~ MOD]</span>
-                        <span className="font-semibold text-white">{d.after.name}</span>
-                        <span className="text-[10px] text-amber-400 font-mono">
+                        <span className="font-mono text-[10px] font-medium bg-[#c9973a]/12 text-[#c9973a] px-1.5 py-0.5 rounded">[~ MOD]</span>
+                        <span className="font-medium text-[#ffffff]">{d.after.name}</span>
+                        <span className="text-[10px] text-[#8e8e93] font-mono">
                           ({d.after.track})
                         </span>
                       </div>
@@ -183,7 +183,11 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                         {d.flags.map((flag) => (
                           <span
                             key={flag}
-                            className="px-2 py-0.5 rounded-full bg-amber-900/60 border border-amber-700/60 font-bold"
+                            className={`px-2 py-0.5 rounded-full ${
+                              flag === 'retimed'
+                                ? 'bg-[#8b7fc7]/12 text-[#8b7fc7]'
+                                : 'bg-[#c9973a]/12 text-[#c9973a]'
+                            }`}
                           >
                             {flag}
                           </span>
@@ -191,7 +195,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                       </div>
                     </div>
 
-                    <div className="text-[10px] text-amber-200/80 font-mono pl-4 space-y-0.5">
+                    <div className="text-[10px] text-[#8e8e93] font-mono pl-4 space-y-0.5">
                       {d.flags.includes('moved') && (
                         <div>&bull; Position: {d.before.start.toFixed(1)}s &rarr; {d.after.start.toFixed(1)}s {d.before.track !== d.after.track ? `(Track: ${d.before.track} → ${d.after.track})` : ''}</div>
                       )}
@@ -210,7 +214,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
             })}
 
           {addedCount === 0 && removedCount === 0 && modifiedCount === 0 && (
-            <div className="text-center py-4 text-zinc-500 text-[11px] italic">
+            <div className="text-center py-4 text-[#8e8e93] text-[11px] italic">
               No differences between base snapshot and variation.
             </div>
           )}
@@ -229,9 +233,9 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
 
       {/* Mode 3: Git Text Diff */}
       {viewMode === 'git' && (
-        <div className="bg-[#0d0d10] border border-[#22222a] rounded-xl p-3 font-mono text-[11px] overflow-x-auto max-h-56">
+        <div className="bg-[#000000] border border-[#222226] rounded-xl p-3 font-mono text-[11px] overflow-x-auto max-h-56">
           {gitText ? (
-            <pre className="text-slate-200 whitespace-pre leading-relaxed">
+            <pre className="text-[#ffffff] whitespace-pre leading-relaxed">
               {gitText.split('\n').map((line, i) => {
                 const isHeader = line.startsWith('@@');
                 const isMinus = line.startsWith('-');
@@ -242,12 +246,12 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
                     key={i}
                     className={
                       isHeader
-                        ? 'text-cyan-400 font-bold py-0.5'
+                        ? 'text-[#5b8def] font-bold py-0.5'
                         : isMinus
-                        ? 'text-rose-400 bg-rose-950/30 -mx-1 px-1'
+                        ? 'text-[#c9605f] bg-[#c9605f]/12 -mx-1 px-1'
                         : isPlus
-                        ? 'text-emerald-400 bg-emerald-950/30 -mx-1 px-1'
-                        : 'text-slate-400'
+                        ? 'text-[#4aa56b] bg-[#4aa56b]/12 -mx-1 px-1'
+                        : 'text-[#8e8e93]'
                     }
                   >
                     {line}
@@ -256,7 +260,7 @@ export function DiffViewer({ baseTimeline, variationTimeline }: DiffViewerProps)
               })}
             </pre>
           ) : (
-            <div className="text-slate-500 text-center py-2 italic">
+            <div className="text-[#8e8e93] text-center py-2 italic">
               Empty diff (no changes)
             </div>
           )}

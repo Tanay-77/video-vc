@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildTimeline, buildPlaceholderSampleTimeline } from '../lib/buildTimeline';
+import { buildTimeline } from '../lib/buildTimeline';
 import { MediaItem } from '../lib/types';
 
 describe('lib/buildTimeline.ts', () => {
@@ -98,28 +98,6 @@ describe('lib/buildTimeline.ts', () => {
 
     expect(a1Clips[0].start).toBe(0);
     expect(a1Clips[0].dur).toBe(15.0);
-  });
-
-  it('buildPlaceholderSampleTimeline returns exactly 6 placeholder clips with no media', () => {
-    const sample = buildPlaceholderSampleTimeline();
-
-    expect(sample.clips.length).toBe(6);
-
-    for (const clip of sample.clips) {
-      expect(clip.mediaId).toBeNull();
-      expect(typeof clip.id).toBe('string');
-      expect(typeof clip.name).toBe('string');
-      expect(typeof clip.start).toBe('number');
-      expect(typeof clip.dur).toBe('number');
-      expect(clip.dur).toBeGreaterThan(0);
-      expect(clip.speed).toBe(1);
-    }
-
-    const v1Count = sample.clips.filter((c) => c.track === 'V1').length;
-    const a1Count = sample.clips.filter((c) => c.track === 'A1').length;
-
-    expect(v1Count).toBe(4);
-    expect(a1Count).toBe(2);
   });
 });
 

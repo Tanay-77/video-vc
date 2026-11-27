@@ -16,7 +16,7 @@ import {
   Plus,
   Film,
   Clapperboard,
-  Sparkles,
+  SlidersHorizontal,
   Music,
 } from 'lucide-react';
 import { Clip, MediaItem, Timeline, TrackType } from '../lib/types';
@@ -33,17 +33,17 @@ interface TimelineViewProps {
 }
 
 const TRACK_ICONS: Record<TrackType, React.ReactNode> = {
-  V2: <Clapperboard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />,
-  V1: <Film className="w-3.5 h-3.5 text-zinc-300 shrink-0" />,
-  CC: <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />,
-  A1: <Music className="w-3.5 h-3.5 text-sky-400 shrink-0" />,
+  V2: <Clapperboard className="w-3.5 h-3.5 text-[#8e8e93] shrink-0" />,
+  V1: <Film className="w-3.5 h-3.5 text-[#8e8e93] shrink-0" />,
+  CC: <SlidersHorizontal className="w-3.5 h-3.5 text-[#8e8e93] shrink-0" />,
+  A1: <Music className="w-3.5 h-3.5 text-[#8e8e93] shrink-0" />,
 };
 
 const TRACKS: { id: TrackType; label: string; desc: string; bg: string; border: string; clipBg: string }[] = [
-  { id: 'V2', label: 'V2', desc: 'Overlays & B-Roll', bg: 'bg-[#101014]', border: 'border-[#1f1f26]', clipBg: 'bg-[#1f883d] hover:bg-[#2ea043] border-[#34c759]/70 text-white shadow-sm' },
-  { id: 'V1', label: 'V1', desc: 'Primary Storyline', bg: 'bg-[#131317]', border: 'border-[#1f1f26]', clipBg: 'bg-[#22252c] hover:bg-[#2d323c] border-[#383e4a] text-zinc-100 shadow-sm' },
-  { id: 'CC', label: 'CC', desc: 'Effects & Titles', bg: 'bg-[#101014]', border: 'border-[#1f1f26]', clipBg: 'bg-[#6e40c9] hover:bg-[#8957e5] border-[#a371f7]/70 text-white shadow-sm' },
-  { id: 'A1', label: 'A1', desc: 'Audio & Music', bg: 'bg-[#0e0e12]', border: 'border-[#1f1f26]', clipBg: 'bg-[#0284c7] hover:bg-[#0ea5e9] border-[#38bdf8]/70 text-white shadow-sm' },
+  { id: 'V2', label: 'V2', desc: 'Overlays & B-Roll', bg: 'bg-[#000000]', border: 'border-[#222226]', clipBg: 'bg-[#1e2330] hover:bg-[#252c3d] border border-[#2e374d] text-[#ffffff]' },
+  { id: 'V1', label: 'V1', desc: 'Primary Storyline', bg: 'bg-[#000000]', border: 'border-[#222226]', clipBg: 'bg-[#1e2330] hover:bg-[#252c3d] border border-[#2e374d] text-[#ffffff]' },
+  { id: 'CC', label: 'CC', desc: 'Effects & Titles', bg: 'bg-[#000000]', border: 'border-[#222226]', clipBg: 'bg-[#1e2330] hover:bg-[#252c3d] border border-[#2e374d] text-[#ffffff]' },
+  { id: 'A1', label: 'A1', desc: 'Audio & Music', bg: 'bg-[#000000]', border: 'border-[#222226]', clipBg: 'bg-[#1e2330] hover:bg-[#252c3d] border border-[#2e374d] text-[#ffffff]' },
 ];
 
 const TRACK_HEIGHT = 56; // 14 Tailwind units = 56px
@@ -660,12 +660,12 @@ export function TimelineView({
   const ticks = Array.from({ length: tickCount + 1 }, (_, i) => i * tickInterval);
 
   return (
-    <div className="bg-[#131317] border border-[#22222a] rounded-2xl overflow-hidden shadow-2xl select-none">
+    <div className="bg-[#121214] border border-[#222226] rounded-2xl overflow-hidden select-none">
       {/* Timeline Header Controls */}
-      <div className="px-4 py-3 bg-[#18181f] border-b border-[#22222a] flex items-center justify-between flex-wrap gap-2">
+      <div className="px-4 py-3 bg-[#121214] border-b border-[#222226] flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-3">
-          {title && <h3 className="font-semibold text-zinc-100 text-sm tracking-tight">{title}</h3>}
-          <span className="text-xs text-zinc-400 bg-[#22222a] border border-[#2e2e38] px-2.5 py-0.5 rounded-full font-mono">
+          {title && <h3 className="font-semibold text-[#ffffff] text-sm tracking-tight">{title}</h3>}
+          <span className="text-xs text-[#8e8e93] bg-[#1c1c20] border border-[#222226] px-2.5 py-0.5 rounded-full font-mono">
             {timeline.clips.length} clip{timeline.clips.length !== 1 ? 's' : ''} &bull; {maxTime.toFixed(1)}s total
           </span>
         </div>
@@ -673,11 +673,11 @@ export function TimelineView({
         {/* Playback & Quick Editing Controls */}
         <div className="flex items-center flex-wrap gap-2">
           {/* Play / Reset */}
-          <div className="flex items-center bg-[#22222c] rounded-lg p-0.5 border border-[#30303c] text-xs shadow-sm">
+          <div className="flex items-center bg-[#1c1c20] rounded-lg p-0.5 border border-[#222226] text-xs">
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
-              className="px-2.5 py-1 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded font-bold transition flex items-center gap-1 shadow-sm"
+              className="px-2.5 py-1 bg-[#1e2330] hover:bg-[#252c3d] text-[#ffffff] rounded font-semibold transition flex items-center gap-1"
               title="Space to toggle play/pause"
             >
               <span>{isPlaying ? <Pause className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}</span>
@@ -689,7 +689,7 @@ export function TimelineView({
                 setIsPlaying(false);
                 updateTime(0);
               }}
-              className="px-2 py-1 text-zinc-300 hover:text-white transition"
+              className="px-2 py-1 text-[#8e8e93] hover:text-[#ffffff] transition"
               title="Return to start (0s)"
             >
               <RotateCcw className="w-3 h-3" />
@@ -698,15 +698,15 @@ export function TimelineView({
 
           {/* Undo & Redo buttons */}
           {editable && (
-            <div className="flex items-center bg-[#22222c] rounded-lg p-0.5 border border-[#30303c] text-xs">
+            <div className="flex items-center bg-[#1c1c20] rounded-lg p-0.5 border border-[#222226] text-xs">
               <button
                 type="button"
                 onClick={handleUndo}
                 disabled={undoStack.length === 0}
                 className={`px-2 py-1 rounded transition flex items-center gap-1 ${
                   undoStack.length > 0
-                    ? 'text-zinc-200 hover:bg-[#2c2c36]'
-                    : 'text-zinc-600 cursor-not-allowed'
+                    ? 'text-[#ffffff] hover:bg-[#222226]'
+                    : 'text-[#8e8e93]/40 cursor-not-allowed'
                 }`}
                 title="Undo (Ctrl+Z)"
               >
@@ -719,8 +719,8 @@ export function TimelineView({
                 disabled={redoStack.length === 0}
                 className={`px-2 py-1 rounded transition flex items-center gap-1 ${
                   redoStack.length > 0
-                    ? 'text-zinc-200 hover:bg-[#2c2c36]'
-                    : 'text-zinc-600 cursor-not-allowed'
+                    ? 'text-[#ffffff] hover:bg-[#222226]'
+                    : 'text-[#8e8e93]/40 cursor-not-allowed'
                 }`}
                 title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
               >
@@ -736,8 +736,8 @@ export function TimelineView({
             onClick={() => setSnappingEnabled(!snappingEnabled)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
               snappingEnabled
-                ? 'bg-[#0071e3]/15 border-[#0071e3]/50 text-[#38bdf8]'
-                : 'bg-[#22222c] border-[#30303c] text-zinc-400 hover:text-zinc-200'
+                ? 'bg-[#5b8def]/15 border-[#5b8def]/50 text-[#5b8def]'
+                : 'bg-transparent border-[#222226] text-[#8e8e93] hover:bg-[#1a1a1e] hover:text-[#ffffff]'
             }`}
             title="Toggle magnetic snapping to clip ends and playhead"
           >
@@ -750,7 +750,7 @@ export function TimelineView({
             <button
               type="button"
               onClick={handleSplitAtPlayhead}
-              className="px-2.5 py-1 bg-[#22222c] hover:bg-[#2c2c36] text-zinc-200 text-xs font-medium rounded-lg border border-[#30303c] transition flex items-center gap-1"
+              className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-lg border border-[#222226] transition flex items-center gap-1"
               title="Split clip at playhead (Hotkey: S)"
             >
               <Scissors className="w-3 h-3" />
@@ -763,7 +763,7 @@ export function TimelineView({
             <button
               type="button"
               onClick={handleDuplicateSelectedClip}
-              className="px-2.5 py-1 bg-[#22222c] hover:bg-[#2c2c36] text-zinc-200 text-xs font-medium rounded-lg border border-[#30303c] transition flex items-center gap-1"
+              className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-lg border border-[#222226] transition flex items-center gap-1"
               title="Duplicate selected clip (Ctrl+D)"
             >
               <Copy className="w-3 h-3" />
@@ -777,7 +777,7 @@ export function TimelineView({
               <button
                 type="button"
                 onClick={handleDeleteSelectedClip}
-                className="px-2.5 py-1 bg-[#ff453a]/15 hover:bg-[#ff453a]/25 border border-[#ff453a]/40 text-[#ff453a] text-xs font-medium rounded-lg transition flex items-center gap-1"
+                className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] border border-[#222226] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-lg transition flex items-center gap-1"
                 title="Lift Delete: removes clip and leaves blank gap (Delete / Backspace)"
               >
                 <Trash2 className="w-3 h-3" />
@@ -786,7 +786,7 @@ export function TimelineView({
               <button
                 type="button"
                 onClick={handleRippleDeleteSelectedClip}
-                className="px-2.5 py-1 bg-[#facc15]/15 hover:bg-[#facc15]/25 border border-[#facc15]/40 text-[#facc15] text-xs font-medium rounded-lg transition flex items-center gap-1"
+                className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] border border-[#222226] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-lg transition flex items-center gap-1"
                 title="Ripple Delete: removes clip and ripples following clips to close gap (Shift+Delete)"
               >
                 <ArrowLeftToLine className="w-3 h-3" />
@@ -800,7 +800,7 @@ export function TimelineView({
             <button
               type="button"
               onClick={handleCloseGaps}
-              className="px-2.5 py-1 bg-[#22222c] hover:bg-[#2c2c36] text-zinc-300 text-xs rounded-lg border border-[#30303c] transition"
+              className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs rounded-lg border border-[#222226] transition"
               title="Snap all V1 video clips one after another with no empty gaps"
             >
               Close Gaps
@@ -812,29 +812,29 @@ export function TimelineView({
             <button
               type="button"
               onClick={() => commitTimelineChange(preventOverlaps(timeline))}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg transition shadow animate-pulse flex items-center gap-1"
+              className="px-2.5 py-1 bg-[#c9973a]/15 hover:bg-[#c9973a]/25 text-[#c9973a] font-semibold text-xs rounded-lg border border-[#c9973a]/40 transition flex items-center gap-1"
               title="Fix overlapping clips on all tracks and arrange them sequentially"
             >
-              <AlertTriangle className="w-3 h-3 text-black" />
+              <AlertTriangle className="w-3 h-3 text-[#c9973a]" />
               <span>Fix Overlaps</span>
             </button>
           )}
 
           {/* Zoom controls */}
-          <div className="flex items-center bg-[#22222c] rounded-lg p-0.5 text-xs text-zinc-300 border border-[#30303c]">
+          <div className="flex items-center bg-[#1c1c20] rounded-lg p-0.5 text-xs text-[#8e8e93] border border-[#222226]">
             <button
               type="button"
               onClick={() => setPxPerSec((p) => Math.max(20, p - 10))}
-              className="px-2 py-1 hover:bg-[#2c2c36] rounded transition"
+              className="px-2 py-1 hover:bg-[#222226] rounded transition text-[#8e8e93] hover:text-[#ffffff]"
               title="Zoom Out"
             >
               -
             </button>
-            <span className="px-1.5 font-mono text-[11px] text-zinc-400">{pxPerSec}px/s</span>
+            <span className="px-1.5 font-mono text-[11px] text-[#8e8e93]">{pxPerSec}px/s</span>
             <button
               type="button"
               onClick={() => setPxPerSec((p) => Math.min(100, p + 10))}
-              className="px-2 py-1 hover:bg-[#2c2c36] rounded transition"
+              className="px-2 py-1 hover:bg-[#222226] rounded transition text-[#8e8e93] hover:text-[#ffffff]"
               title="Zoom In"
             >
               +
@@ -844,7 +844,7 @@ export function TimelineView({
           <button
             type="button"
             onClick={handleExportJSON}
-            className="px-2.5 py-1 bg-[#22222c] hover:bg-[#2c2c36] text-zinc-300 text-xs rounded-lg border border-[#30303c] transition"
+            className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs rounded-lg border border-[#222226] transition"
             title="Export Timeline as JSON"
           >
             JSON
@@ -854,7 +854,7 @@ export function TimelineView({
             <button
               type="button"
               onClick={handleOpenAddClip}
-              className="px-3 py-1 bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-medium rounded-lg transition shadow-sm flex items-center gap-1"
+              className="px-3 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] text-xs font-medium rounded-lg border border-[#222226] transition flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               <span>{isAddingClip ? 'Cancel' : 'Add Clip'}</span>
@@ -864,22 +864,22 @@ export function TimelineView({
       </div>
 
       {/* Monitor HUD preview */}
-      <div className="px-4 py-2 bg-[#0e0e12] border-b border-[#22222a] flex items-center justify-between text-xs text-zinc-400">
+      <div className="px-4 py-2 bg-[#0c0c0e] border-b border-[#222226] flex items-center justify-between text-xs text-[#8e8e93]">
         <div className="flex items-center space-x-3 overflow-hidden">
-          <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider shrink-0">Playhead Monitor:</span>
+          <span className="text-[10px] uppercase font-bold text-[#8e8e93] tracking-wider shrink-0">Playhead Monitor:</span>
           {activeVideoClip ? (
-            <span className="inline-flex items-center gap-1.5 font-medium text-zinc-200 truncate">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${activeVideoClip.track === 'V2' ? 'bg-[#34c759]' : 'bg-amber-400'}`}></span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#ffffff] truncate">
+              <span className="w-2 h-2 rounded-full shrink-0 bg-[#8e8e93]"></span>
               <span className="truncate font-mono">[{activeVideoClip.track}] {activeVideoClip.name}</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-2 text-zinc-500 italic">
+            <span className="inline-flex items-center gap-2 text-[#8e8e93] italic">
               <span>Black frame (gap) at {currentTime.toFixed(1)}s</span>
               {editable && timeline.clips.some((c) => c.track === 'V1' && c.start > 0) && (
                 <button
                   type="button"
                   onClick={handleCloseGaps}
-                  className="not-italic text-[10px] font-semibold bg-[#22222c] hover:bg-[#2c2c36] text-cyan-300 px-2 py-0.5 rounded border border-[#30303c] transition flex items-center gap-1 shadow-sm"
+                  className="not-italic text-[10px] font-semibold bg-[#1c1c20] hover:bg-[#222226] text-[#8e8e93] hover:text-[#ffffff] px-2 py-0.5 rounded border border-[#222226] transition flex items-center gap-1"
                   title="Remove empty gap and snap clips to start at 0.0s"
                 >
                   <ArrowLeftToLine className="w-3 h-3" />
@@ -890,34 +890,34 @@ export function TimelineView({
           )}
 
           {activeAudioClip && (
-            <span className="inline-flex items-center gap-1 text-[#38bdf8] text-[11px] shrink-0 font-mono">
+            <span className="inline-flex items-center gap-1 text-[#8e8e93] text-[11px] shrink-0 font-mono">
               <Music className="w-3 h-3" />
               <span>{activeAudioClip.name}</span>
             </span>
           )}
 
           {activeEffectClip && (
-            <span className="inline-flex items-center gap-1 text-[#a371f7] text-[11px] shrink-0 font-mono">
-              <Sparkles className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 text-[#8e8e93] text-[11px] shrink-0 font-mono">
+              <SlidersHorizontal className="w-3 h-3" />
               <span>{activeEffectClip.name}</span>
             </span>
           )}
         </div>
 
-        <div className="font-mono text-[11px] text-zinc-400 shrink-0">
-          Position: <strong className="text-white">{currentTime.toFixed(2)}s</strong> / {maxTime.toFixed(1)}s
+        <div className="font-mono text-[11px] text-[#8e8e93] shrink-0">
+          Position: <strong className="text-[#ffffff]">{currentTime.toFixed(2)}s</strong> / {maxTime.toFixed(1)}s
         </div>
       </div>
 
       {/* Add clip modal/panel */}
       {isAddingClip && editable && (
-        <form onSubmit={handleAddClip} className="p-4 bg-slate-950/90 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
+        <form onSubmit={handleAddClip} className="p-4 bg-[#0c0c0e] border-b border-[#222226] grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
           <div>
-            <label className="block text-slate-400 mb-1">Track</label>
+            <label className="block text-[#8e8e93] mb-1">Track</label>
             <select
               value={newTrack}
               onChange={(e) => setNewTrack(e.target.value as TrackType)}
-              className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1.5 text-zinc-100"
+              className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1.5 text-[#ffffff]"
             >
               <option value="V2">V2 (Overlay)</option>
               <option value="V1">V1 (Primary)</option>
@@ -927,19 +927,19 @@ export function TimelineView({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1">Clip Name</label>
+            <label className="block text-[#8e8e93] mb-1">Clip Name</label>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Intro cut"
-              className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1.5 text-zinc-100 placeholder-zinc-500"
+              className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1.5 text-[#ffffff] placeholder-[#8e8e93]/60"
               required
             />
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1">Source Media</label>
+            <label className="block text-[#8e8e93] mb-1">Source Media</label>
             <select
               value={newMediaId}
               onChange={(e) => {
@@ -959,7 +959,7 @@ export function TimelineView({
                   }
                 }
               }}
-              className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1.5 text-zinc-100"
+              className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1.5 text-[#ffffff]"
             >
               <option value="">(None / Generator)</option>
               {mediaList.map((m) => (
@@ -971,22 +971,22 @@ export function TimelineView({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1">Start Time (s)</label>
+            <label className="block text-[#8e8e93] mb-1">Start Time (s)</label>
             <input
               type="number"
               step="0.1"
               min="0"
               value={newStart}
               onChange={(e) => setNewStart(parseFloat(e.target.value) || 0)}
-              className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1.5 text-zinc-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1.5 text-[#ffffff] focus:outline-none focus:border-[#5b8def]"
             />
           </div>
 
           <div className="flex flex-col justify-center">
-            <span className="block text-zinc-400 mb-1">Duration</span>
-            <div className="px-2.5 py-1.5 bg-[#18181f] border border-[#2a2a36] rounded-lg text-zinc-200 font-mono text-xs flex items-center justify-between">
+            <span className="block text-[#8e8e93] mb-1">Duration</span>
+            <div className="px-2.5 py-1.5 bg-[#000000] border border-[#222226] rounded-lg text-[#ffffff] font-mono text-xs flex items-center justify-between">
               <span>{mediaList.find((m) => m.id === newMediaId) ? `${mediaList.find((m) => m.id === newMediaId)?.duration.toFixed(1)}s` : '5.0s'}</span>
-              <span className="text-[10px] text-emerald-400 font-sans font-semibold">
+              <span className="text-[10px] text-[#8e8e93] font-sans font-semibold">
                 {mediaList.find((m) => m.id === newMediaId) ? 'Full Media' : 'Generator'}
               </span>
             </div>
@@ -995,7 +995,7 @@ export function TimelineView({
           <div className="flex items-end">
             <button
               type="submit"
-              className="w-full py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white font-semibold rounded-lg transition shadow-sm"
+              className="w-full py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] font-semibold rounded-lg transition"
             >
               + Add Clip
             </button>
@@ -1013,16 +1013,16 @@ export function TimelineView({
           {/* Ruler (Click & Drag to Scrub Playhead) */}
           <div
             onMouseDown={handleRulerMouseDown}
-            className="h-7 bg-[#0d0d10] border-b border-[#22222a] flex items-center relative pl-24 cursor-ew-resize hover:bg-[#131317] transition"
+            className="h-7 bg-[#000000] border-b border-[#222226] flex items-center relative cursor-ew-resize hover:bg-[#0c0c0e] transition"
             title="Click or drag to scrub playhead"
           >
-            <div className="absolute left-0 top-0 bottom-0 w-24 bg-[#0f0f13] border-r border-[#22222a] text-[10px] text-zinc-500 uppercase font-semibold flex items-center px-2.5 cursor-default">
+            <div className="sticky left-0 z-40 shrink-0 w-24 h-full bg-[#121214] border-r border-[#222226] text-[10px] text-[#8e8e93] uppercase font-semibold flex items-center px-2.5 cursor-default shadow-[2px_0_6px_rgba(0,0,0,0.5)]">
               Time (s)
             </div>
             {ticks.map((t) => (
               <div
                 key={t}
-                className="absolute top-0 bottom-0 flex flex-col justify-end text-[10px] font-mono text-zinc-500 border-l border-[#22222a] pl-1 pointer-events-none pb-0.5"
+                className="absolute top-0 bottom-0 flex flex-col justify-end text-[10px] font-mono text-[#8e8e93] border-l border-[#222226] pl-1 pointer-events-none pb-0.5"
                 style={{ left: `${96 + t * pxPerSec}px` }}
               >
                 <span>{t}s</span>
@@ -1030,30 +1030,30 @@ export function TimelineView({
             ))}
           </div>
 
-          {/* Interactive Apple White Playhead Line & Scrubber Diamond */}
+          {/* Interactive Playhead Line & Scrubber Diamond - White Final Cut Pro style */}
           <div
             style={{ left: `${96 + currentTime * pxPerSec}px` }}
             onMouseDown={(e) => {
               e.stopPropagation();
               setIsScrubbing(true);
             }}
-            className="absolute top-0 bottom-0 w-[2px] bg-white z-30 cursor-ew-resize shadow-[0_0_8px_rgba(255,255,255,0.9)] hover:w-[3px] transition-all"
+            className="absolute top-0 bottom-0 w-[1.5px] bg-white z-30 cursor-ew-resize hover:w-[2px] transition-all"
             title={`Playhead: ${currentTime.toFixed(2)}s (Drag to scrub)`}
           >
             {/* Playhead Grabber Diamond on Ruler */}
-            <div className="w-3.5 h-3.5 bg-white -ml-[6px] -mt-0.5 rounded-[2px] rotate-45 shadow-[0_0_10px_white] border border-white/80 hover:scale-125 transition-transform cursor-grab active:cursor-grabbing" />
+            <div className="w-3 h-3 bg-white -ml-[5px] -mt-0.5 rounded-[2px] rotate-45 border border-white hover:scale-125 transition-transform cursor-grab active:cursor-grabbing" />
           </div>
 
           {/* Snapping Guide Line Indicator */}
           {dragState && snappingEnabled && (
             <div
               style={{ left: `${96 + dragState.currentStart * pxPerSec}px` }}
-              className="absolute top-0 bottom-0 w-px bg-amber-400 z-20 pointer-events-none opacity-80"
+              className="absolute top-0 bottom-0 w-px bg-white/70 z-20 pointer-events-none opacity-80"
             />
           )}
 
           {/* Track Lanes */}
-          <div ref={tracksContainerRef} className="divide-y divide-[#1e1e26]">
+          <div ref={tracksContainerRef} className="divide-y divide-[#222226]">
             {TRACKS.map((track) => {
               // Collect clips for this track, taking into account live dragging across tracks
               const trackClips = timeline.clips
@@ -1078,16 +1078,16 @@ export function TimelineView({
               return (
                 <div key={track.id} className={`h-14 flex relative items-center ${track.bg}`}>
                   {/* Track Label Sidebar */}
-                  <div className="sticky left-0 z-20 w-24 h-full bg-[#0f0f13] border-r border-[#22222a] px-2.5 py-1 flex items-center gap-2 shadow-md">
+                  <div className="sticky left-0 z-40 shrink-0 w-24 h-full bg-[#121214] border-r border-[#222226] px-2.5 py-1 flex items-center gap-2 shadow-[2px_0_6px_rgba(0,0,0,0.5)]">
                     <div className="shrink-0">{TRACK_ICONS[track.id]}</div>
                     <div className="flex flex-col justify-center min-w-0">
-                      <span className="font-bold text-xs text-zinc-200">{track.label}</span>
-                      <span className="text-[9px] text-zinc-500 truncate">{track.desc}</span>
+                      <span className="font-bold text-xs text-[#ffffff]">{track.label}</span>
+                      <span className="text-[9px] text-[#8e8e93] truncate">{track.desc}</span>
                     </div>
                   </div>
 
                   {/* Track Lane Body */}
-                  <div className="relative h-full flex-1">
+                  <div className="relative h-full flex-1 min-w-0">
                     {trackClips.map((clip) => {
                       const left = clip.start * pxPerSec;
                       const width = Math.max(30, clip.dur * pxPerSec);
@@ -1108,29 +1108,17 @@ export function TimelineView({
                           }}
                           className={`absolute top-1.5 bottom-1.5 rounded-lg border px-2 py-1 transition-shadow flex flex-col justify-between text-xs overflow-hidden select-none group ${track.clipBg} ${
                             isDraggingThis
-                              ? 'cursor-grabbing shadow-2xl ring-2 ring-amber-400 z-30 opacity-95 scale-[1.01]'
+                              ? 'cursor-grabbing shadow-lg ring-1 ring-[#5b8def] z-30 opacity-95 scale-[1.01]'
                               : isSelected
-                              ? 'border-2 border-amber-400 ring-2 ring-amber-400/80 shadow-[0_0_15px_rgba(250,204,21,0.4)] z-20 brightness-110 cursor-grab'
+                              ? 'border border-[#5b8def] ring-1 ring-[#5b8def] z-20 cursor-grab'
                               : 'opacity-90 hover:opacity-100 cursor-grab'
                           }`}
                         >
-                          {/* Final Cut Pro Bracket Grabbers when selected */}
-                          {isSelected && (
-                            <>
-                              <div className="absolute left-0 top-0 bottom-0 w-2 bg-amber-400 text-black flex items-center justify-center font-bold text-[9px] select-none pointer-events-none rounded-l-sm">
-                                ‹
-                              </div>
-                              <div className="absolute right-0 top-0 bottom-0 w-2 bg-amber-400 text-black flex items-center justify-center font-bold text-[9px] select-none pointer-events-none rounded-r-sm">
-                                ›
-                              </div>
-                            </>
-                          )}
-
                           {/* Left Trim Handle */}
                           {editable && (
                             <div
                               onMouseDown={(e) => handleStartClipDrag(e, clip, 'trim-left')}
-                              className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                               title="Trim In-point (Drag to adjust start)"
                             >
                               <div className="w-0.5 h-4 bg-white/70 rounded"></div>
@@ -1138,26 +1126,26 @@ export function TimelineView({
                           )}
 
                           {/* Clip Body Title & Speed */}
-                          <div className={`flex items-center justify-between text-[11px] font-semibold text-white truncate gap-1 pointer-events-none ${isSelected ? 'pl-2 pr-2' : 'pl-1 pr-1'}`}>
+                          <div className={`flex items-center justify-between text-[11px] font-semibold text-[#ffffff] truncate gap-1 pointer-events-none ${isSelected ? 'pl-2 pr-2' : 'pl-1 pr-1'}`}>
                             <span className="truncate">{clip.name}</span>
                             {clip.speed !== 1 && (
-                              <span className="text-[9px] bg-black/60 px-1 rounded text-white/90 font-mono">
+                              <span className="text-[9px] bg-[#000000]/80 px-1 rounded text-[#ffffff] font-mono">
                                 {clip.speed}x
                               </span>
                             )}
                           </div>
 
                           {/* Clip Timecode Footer */}
-                          <div className={`text-[10px] font-mono text-white/80 flex items-center justify-between pointer-events-none ${isSelected ? 'pl-2 pr-2' : 'pl-1 pr-1'}`}>
+                          <div className={`text-[10px] font-mono text-[#8e8e93] flex items-center justify-between pointer-events-none ${isSelected ? 'pl-2 pr-2' : 'pl-1 pr-1'}`}>
                             <span>{clip.start.toFixed(1)}s</span>
-                            <span>{clip.dur.toFixed(1)}s</span>
+                            <span title={`Duration: ${clip.dur.toFixed(1)}s`}>{(clip.start + clip.dur).toFixed(1)}s</span>
                           </div>
 
                           {/* Right Trim Handle */}
                           {editable && (
                             <div
                               onMouseDown={(e) => handleStartClipDrag(e, clip, 'trim-right')}
-                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                               title="Trim Out-point (Drag to adjust duration)"
                             >
                               <div className="w-0.5 h-4 bg-white/70 rounded"></div>
@@ -1176,14 +1164,14 @@ export function TimelineView({
 
       {/* Selected Clip Inspector */}
       {selectedClip && (
-        <div className="p-4 bg-[#0e0e12] border-t border-[#22222a] text-xs">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#1f1f28]">
+        <div className="p-4 bg-[#121214] border-t border-[#222226] text-xs">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#222226]">
             <div className="flex items-center space-x-2">
-              <span className="px-2 py-0.5 rounded font-mono font-bold bg-[#1e1e28] text-amber-400 border border-amber-400/30">
+              <span className="px-2 py-0.5 rounded font-mono font-bold bg-[#1c1c20] text-[#8e8e93] border border-[#222226]">
                 {selectedClip.track}
               </span>
-              <h4 className="font-semibold text-zinc-100 text-sm">{selectedClip.name}</h4>
-              <span className="text-zinc-500 font-mono text-[10px]">ID: {selectedClip.id.slice(0, 8)}...</span>
+              <h4 className="font-semibold text-[#ffffff] text-sm">{selectedClip.name}</h4>
+              <span className="text-[#8e8e93] font-mono text-[10px]">ID: {selectedClip.id.slice(0, 8)}...</span>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -1192,14 +1180,14 @@ export function TimelineView({
                   <button
                     type="button"
                     onClick={handleDuplicateSelectedClip}
-                    className="px-2.5 py-1 bg-[#1e1e28] hover:bg-[#282836] text-zinc-200 rounded-lg border border-[#2c2c3c] transition"
+                    className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] rounded-lg border border-[#222226] transition"
                   >
                     Duplicate (Ctrl+D)
                   </button>
                   <button
                     type="button"
                     onClick={handleDeleteSelectedClip}
-                    className="px-2.5 py-1 bg-red-950/60 hover:bg-red-900/80 text-red-300 rounded-lg border border-red-800/60 transition"
+                    className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#c9605f] hover:text-[#ffffff] rounded-lg border border-[#222226] transition"
                   >
                     Delete Clip
                   </button>
@@ -1210,12 +1198,12 @@ export function TimelineView({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
             <div>
-              <span className="block text-zinc-400 mb-1">Track</span>
+              <span className="block text-[#8e8e93] mb-1">Track</span>
               {editable ? (
                 <select
                   value={selectedClip.track}
                   onChange={(e) => handleUpdateSelectedClip('track', e.target.value as TrackType)}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1 text-zinc-200"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1 text-[#ffffff]"
                 >
                   <option value="V2">V2</option>
                   <option value="V1">V1</option>
@@ -1223,12 +1211,12 @@ export function TimelineView({
                   <option value="CC">CC</option>
                 </select>
               ) : (
-                <span className="font-mono text-zinc-200">{selectedClip.track}</span>
+                <span className="font-mono text-[#ffffff]">{selectedClip.track}</span>
               )}
             </div>
 
             <div>
-              <span className="block text-zinc-400 mb-1">Timeline Start</span>
+              <span className="block text-[#8e8e93] mb-1">Timeline Start</span>
               {editable ? (
                 <input
                   type="number"
@@ -1236,15 +1224,15 @@ export function TimelineView({
                   min="0"
                   value={selectedClip.start}
                   onChange={(e) => handleUpdateSelectedClip('start', Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1 text-zinc-200"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1 text-[#ffffff]"
                 />
               ) : (
-                <span className="font-mono text-zinc-200">{selectedClip.start.toFixed(2)}s</span>
+                <span className="font-mono text-[#ffffff]">{selectedClip.start.toFixed(2)}s</span>
               )}
             </div>
 
             <div>
-              <span className="block text-zinc-400 mb-1">Duration</span>
+              <span className="block text-[#8e8e93] mb-1">Duration</span>
               {editable ? (
                 <input
                   type="number"
@@ -1252,15 +1240,15 @@ export function TimelineView({
                   min="0.1"
                   value={selectedClip.dur}
                   onChange={(e) => handleUpdateSelectedClip('dur', Math.max(0.1, parseFloat(e.target.value) || 0.1))}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1 text-zinc-200"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1 text-[#ffffff]"
                 />
               ) : (
-                <span className="font-mono text-zinc-200">{selectedClip.dur.toFixed(2)}s</span>
+                <span className="font-mono text-[#ffffff]">{selectedClip.dur.toFixed(2)}s</span>
               )}
             </div>
 
             <div>
-              <span className="block text-zinc-400 mb-1">Source In &bull; Out</span>
+              <span className="block text-[#8e8e93] mb-1">Source In &bull; Out</span>
               {editable ? (
                 <div className="flex space-x-1">
                   <input
@@ -1269,7 +1257,7 @@ export function TimelineView({
                     min="0"
                     value={selectedClip.sourceIn}
                     onChange={(e) => handleUpdateSelectedClip('sourceIn', parseFloat(e.target.value) || 0)}
-                    className="w-1/2 bg-[#18181f] border border-[#2a2a36] rounded-lg px-1.5 py-1 text-zinc-200"
+                    className="w-1/2 bg-[#000000] border border-[#222226] rounded-lg px-1.5 py-1 text-[#ffffff]"
                   />
                   <input
                     type="number"
@@ -1277,18 +1265,18 @@ export function TimelineView({
                     min="0"
                     value={selectedClip.sourceOut}
                     onChange={(e) => handleUpdateSelectedClip('sourceOut', parseFloat(e.target.value) || 0)}
-                    className="w-1/2 bg-[#18181f] border border-[#2a2a36] rounded-lg px-1.5 py-1 text-zinc-200"
+                    className="w-1/2 bg-[#000000] border border-[#222226] rounded-lg px-1.5 py-1 text-[#ffffff]"
                   />
                 </div>
               ) : (
-                <span className="font-mono text-zinc-200">
+                <span className="font-mono text-[#ffffff]">
                   {selectedClip.sourceIn.toFixed(1)}s &rarr; {selectedClip.sourceOut.toFixed(1)}s
                 </span>
               )}
             </div>
 
             <div>
-              <span className="block text-zinc-400 mb-1">Speed</span>
+              <span className="block text-[#8e8e93] mb-1">Speed</span>
               {editable ? (
                 <input
                   type="number"
@@ -1297,16 +1285,16 @@ export function TimelineView({
                   max="4"
                   value={selectedClip.speed}
                   onChange={(e) => handleUpdateSelectedClip('speed', parseFloat(e.target.value) || 1.0)}
-                  className="w-full bg-[#18181f] border border-[#2a2a36] rounded-lg px-2 py-1 text-zinc-200"
+                  className="w-full bg-[#000000] border border-[#222226] rounded-lg px-2 py-1 text-[#ffffff]"
                 />
               ) : (
-                <span className="font-mono text-zinc-200">{selectedClip.speed}x</span>
+                <span className="font-mono text-[#ffffff]">{selectedClip.speed}x</span>
               )}
             </div>
 
             <div>
-              <span className="block text-zinc-400 mb-1">Linked Media</span>
-              <span className="text-zinc-300 truncate block">
+              <span className="block text-[#8e8e93] mb-1">Linked Media</span>
+              <span className="text-[#ffffff] truncate block">
                 {mediaList.find((m) => m.id === selectedClip.mediaId)?.name || (selectedClip.mediaId ? selectedClip.mediaId : 'None')}
               </span>
             </div>

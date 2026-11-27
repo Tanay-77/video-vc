@@ -3,38 +3,34 @@
 @tailwind utilities;
 
 :root {
-  --background: #0a0a0d;
-  --foreground: #f4f4f7;
-  --panel-bg: #131317;
-  --panel-border: #22222a;
-  --fcp-yellow: #facc15;
-  --fcp-purple: #7c3aed;
-  --fcp-green: #22c55e;
-  --fcp-blue: #0284c7;
+  --background: #000000;
+  --foreground: #ffffff;
+  --panel-bg: #121214;
+  --panel-border: #222226;
+  --secondary-text: #8e8e93;
+  --accent: #5b8def;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: #ffffff;
+  background: #000000;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   min-height: 100vh;
   letter-spacing: -0.01em;
 }
 
-/* Apple Pro custom scrollbars for timeline and media tracks */
+/* Custom muted scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0d;
+  background: #000000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #272730;
+  background: #28282c;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f4e;
+  background: #3e3e44;
 }
-
-

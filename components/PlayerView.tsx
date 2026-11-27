@@ -222,9 +222,9 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
     : 0;
 
   return (
-    <div className="bg-[#131317] border border-[#22222a] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+    <div className="bg-[#121214] border border-[#222226] rounded-2xl overflow-hidden flex flex-col">
       {/* Video Preview Frame */}
-      <div className="relative aspect-video w-full bg-[#0a0a0d] flex items-center justify-center overflow-hidden border-b border-[#22222a]">
+      <div className="relative aspect-video w-full bg-[#000000] flex items-center justify-center overflow-hidden border-b border-[#222226]">
         {/* Hidden / Managed audio elements for each A1 clip */}
         {a1Clips.map((clip) => (
           <audio
@@ -248,18 +248,18 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
           }`}
         />
 
-        {/* Placeholder Box when clip has no mediaId (e.g. sample project colored box) */}
+        {/* Placeholder Box when clip has no mediaId */}
         {currentV1Clip && !currentV1Clip.mediaId && (
           <div
-            className={`w-4/5 h-3/5 rounded-2xl border-2 flex flex-col items-center justify-center p-6 text-center shadow-2xl transition-all ${PLACEHOLDER_COLORS[placeholderColorIndex]}`}
+            className="w-4/5 h-3/5 rounded-2xl border border-[#3a3a40] bg-[#1e1e24] flex flex-col items-center justify-center p-6 text-center text-[#ffffff]"
           >
-            <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-black/40 mb-2">
-              V1 Placeholder Clip
+            <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#121214]/80 mb-2 text-[#8e8e93]">
+              V1 Clip
             </span>
-            <h4 className="text-lg sm:text-xl font-bold truncate max-w-full">
+            <h4 className="text-lg sm:text-xl font-bold truncate max-w-full text-[#ffffff]">
               {currentV1Clip.name}
             </h4>
-            <div className="text-xs font-mono opacity-80 mt-2">
+            <div className="text-xs font-mono opacity-80 mt-2 text-[#8e8e93]">
               {(currentTime - currentV1Clip.start).toFixed(1)}s / {currentV1Clip.dur.toFixed(1)}s
             </div>
           </div>
@@ -267,11 +267,11 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
 
         {/* Black Frame in Gaps */}
         {!currentV1Clip && (
-          <div className="flex flex-col items-center justify-center space-y-2 select-none text-zinc-600">
-            <div className="w-8 h-8 rounded-full border border-zinc-800 flex items-center justify-center text-xs">
+          <div className="flex flex-col items-center justify-center space-y-2 select-none text-[#8e8e93]">
+            <div className="w-8 h-8 rounded-full border border-[#222226] flex items-center justify-center text-xs">
               <Square className="w-2.5 h-2.5 fill-current" />
             </div>
-            <span className="text-xs font-mono uppercase tracking-widest">
+            <span className="text-xs font-mono uppercase tracking-widest text-[#8e8e93]">
               Black Frame (Gap)
             </span>
           </div>
@@ -279,34 +279,28 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
 
         {/* Live HUD Overlay */}
         <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
-          <span className="px-2.5 py-1 bg-[#101014]/80 backdrop-blur-md rounded-full text-[11px] font-mono text-zinc-200 border border-white/10">
+          <span className="px-2.5 py-1 bg-[#121214]/90 rounded-full text-[11px] font-mono text-[#ffffff] border border-[#222226]">
             {formatTimecode(currentTime)} / {formatTimecode(totalDuration)}
           </span>
           {currentV1Clip && (
-            <span className="px-2.5 py-1 bg-[#1f883d]/20 text-emerald-300 backdrop-blur-md rounded-full text-[10px] font-mono border border-emerald-500/40">
-              V1: {currentV1Clip.name}
+            <span className="px-2.5 py-1 bg-[#121214]/90 rounded-full text-[11px] font-mono border border-[#222226] flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#8e8e93] shrink-0" />
+              <span className="text-[#8e8e93] font-medium">V1:</span>
+              <span className="text-[#ffffff] font-medium truncate max-w-[160px]">{currentV1Clip.name}</span>
             </span>
           )}
           {a1Clips.some((c) => currentTime >= c.start && currentTime < c.start + c.dur) && (
-            <span className="px-2.5 py-1 bg-[#0284c7]/20 text-sky-300 backdrop-blur-md rounded-full text-[10px] font-mono border border-sky-500/40 flex items-center gap-1">
-              <Music className="w-3 h-3" />
-              <span>A1 Playing</span>
+            <span className="px-2.5 py-1 bg-[#121214]/90 rounded-full text-[11px] font-mono border border-[#222226] flex items-center gap-1.5">
+              <Music className="w-3 h-3 text-[#8e8e93] shrink-0" />
+              <span className="text-[#8e8e93] font-medium">A1:</span>
+              <span className="text-[#ffffff] font-medium">Playing</span>
             </span>
           )}
         </div>
-
-        {/* Apple Pro Floating Duration Tag */}
-        {currentV1Clip && (
-          <div className="absolute top-3 right-3 pointer-events-none">
-            <span className="px-3 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-xs font-medium text-zinc-200 shadow-md">
-              Selected: {currentV1Clip.dur.toFixed(1)}s
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Playback Controls & Scrubber */}
-      <div className="p-3.5 bg-[#0d0d10] space-y-3">
+      <div className="p-3.5 bg-[#121214] space-y-3">
         {/* Scrubber Bar */}
         <div className="flex items-center space-x-3">
           <input
@@ -316,9 +310,9 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
             step={0.05}
             value={currentTime}
             onChange={(e) => updateTime(parseFloat(e.target.value) || 0)}
-            className="flex-1 accent-[#0071e3] cursor-pointer h-1.5 bg-[#202028] rounded-full appearance-none"
+            className="flex-1 accent-white cursor-pointer h-1.5 bg-[#222226] rounded-full appearance-none"
           />
-          <span className="text-xs font-mono text-zinc-400 w-16 text-right">
+          <span className="text-xs font-mono text-[#8e8e93] w-16 text-right">
             {currentTime.toFixed(1)}s
           </span>
         </div>
@@ -330,7 +324,7 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
-              className="px-4 py-1.5 bg-[#0071e3] hover:bg-[#0077ed] text-white font-medium rounded-full text-xs transition shadow-[0_0_12px_rgba(0,113,227,0.35)] flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-[#5b8def] hover:bg-[#6c9bf5] text-[#000000] font-semibold rounded-full text-xs transition flex items-center gap-1.5"
             >
               {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
               <span>{isPlaying ? 'Pause' : 'Play'}</span>
@@ -343,7 +337,7 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
                 setIsPlaying(false);
                 updateTime(0);
               }}
-              className="px-3 py-1.5 bg-[#18181f] hover:bg-[#22222a] text-zinc-300 rounded-full text-xs transition border border-[#2a2a36] flex items-center gap-1"
+              className="px-3 py-1.5 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] rounded-full text-xs transition border border-[#222226] flex items-center gap-1"
               title="Return to start"
             >
               <RotateCcw className="w-3 h-3" />
@@ -356,8 +350,8 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
               onClick={() => setIsVideoMuted(!isVideoMuted)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition border flex items-center gap-1.5 ${
                 isVideoMuted
-                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-950/60'
-                  : 'bg-[#18181f] border-[#2a2a36] text-zinc-300 hover:bg-[#22222a]'
+                  ? 'bg-[#1c1c20] border-[#222226] text-[#ffffff]'
+                  : 'bg-transparent border-[#222226] text-[#8e8e93] hover:bg-[#1a1a1e] hover:text-[#ffffff]'
               }`}
               title="Toggle video track sound (music sits on top)"
             >
@@ -366,7 +360,7 @@ export function PlayerView({ timeline, time: propTime, onTime }: PlayerViewProps
             </button>
           </div>
 
-          <div className="text-[11px] text-zinc-500 font-mono">
+          <div className="text-[11px] text-[#8e8e93] font-mono">
             {a1Clips.length} A1 audio clip{a1Clips.length !== 1 ? 's' : ''} &bull; {timeline.clips.length} total clip{timeline.clips.length !== 1 ? 's' : ''}
           </div>
         </div>

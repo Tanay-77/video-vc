@@ -13,7 +13,7 @@ export function ChangeCards({ diffResult }: ChangeCardsProps) {
 
   if (changedItems.length === 0) {
     return (
-      <div className="p-6 bg-[#131317] border border-[#22222a] rounded-xl text-center text-xs text-zinc-400 italic">
+      <div className="p-6 bg-[#121214] border border-[#222226] rounded-xl text-center text-xs text-[#8e8e93] italic">
         No differences between the base cut and this variation.
       </div>
     );
@@ -27,7 +27,6 @@ export function ChangeCards({ diffResult }: ChangeCardsProps) {
         let track = '';
         let timeRange = '';
         let badgeColor = '';
-        let cardBg = '';
         let icon = '';
 
         if (item.status === 'added' && item.after) {
@@ -35,16 +34,14 @@ export function ChangeCards({ diffResult }: ChangeCardsProps) {
           detail = `New clip added to cut (${item.after.dur.toFixed(1)}s)`;
           track = item.after.track;
           timeRange = `${item.after.start.toFixed(1)}s &ndash; ${(item.after.start + item.after.dur).toFixed(1)}s`;
-          badgeColor = 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60';
-          cardBg = 'bg-emerald-950/20 border-emerald-800/40 hover:border-emerald-600/70';
+          badgeColor = 'bg-[#4aa56b]/12 text-[#4aa56b]';
           icon = '+ ADD';
         } else if (item.status === 'removed' && item.before) {
           title = `Removed clip "${item.name}"`;
           detail = `Deleted clip previously running for ${item.before.dur.toFixed(1)}s`;
           track = item.before.track;
           timeRange = `at ${item.before.start.toFixed(1)}s`;
-          badgeColor = 'bg-rose-950/80 text-rose-300 border-rose-700/60';
-          cardBg = 'bg-rose-950/20 border-rose-800/40 hover:border-rose-600/70';
+          badgeColor = 'bg-[#c9605f]/12 text-[#c9605f]';
           icon = '- DEL';
         } else if (item.status === 'modified' && item.before && item.after) {
           const isTrimmed = item.flags.includes('trimmed');
@@ -73,33 +70,32 @@ export function ChangeCards({ diffResult }: ChangeCardsProps) {
 
           track = item.after.track;
           timeRange = `${item.after.start.toFixed(1)}s &ndash; ${(item.after.start + item.after.dur).toFixed(1)}s`;
-          badgeColor = 'bg-amber-950/80 text-amber-300 border-amber-700/60';
-          cardBg = 'bg-amber-950/20 border-amber-800/40 hover:border-amber-600/70';
+          badgeColor = isRetimed ? 'bg-[#8b7fc7]/12 text-[#8b7fc7]' : 'bg-[#c9973a]/12 text-[#c9973a]';
           icon = '~ MOD';
         }
 
         return (
           <div
             key={`change-${idx}`}
-            className={`p-3.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cardBg}`}
+            className="p-3.5 rounded-xl border border-[#222226] bg-[#121214] hover:border-[#2c2c30] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${badgeColor}`}>
+                <span className={`text-[10px] font-mono font-medium px-2 py-0.5 rounded uppercase shrink-0 ${badgeColor}`}>
                   {icon}
                 </span>
-                <h4 className="font-semibold text-zinc-100 text-xs sm:text-sm">
+                <h4 className="font-semibold text-[#ffffff] text-xs sm:text-sm">
                   {title}
                 </h4>
               </div>
-              <p className="text-xs text-zinc-400 pl-7">
+              <p className="text-xs text-[#8e8e93] pl-7">
                 {detail}
               </p>
             </div>
 
             <div className="shrink-0 pl-7 sm:pl-0">
               <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#18181f] border border-[#2a2a36] text-zinc-300"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#1c1c20] border border-[#222226] text-[#8e8e93]"
                 dangerouslySetInnerHTML={{ __html: `Track ${track} &bull; ${timeRange}` }}
               />
             </div>
@@ -128,16 +124,16 @@ export function GitTextPanel({ diffResult }: GitTextPanelProps) {
   };
 
   return (
-    <div className="bg-[#131317] border border-[#22222a] rounded-2xl overflow-hidden shadow-sm text-xs">
+    <div className="bg-[#121214] border border-[#222226] rounded-2xl overflow-hidden shadow-sm text-xs">
       {/* Header bar / Toggle */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="p-3 bg-[#18181f] hover:bg-[#202028] cursor-pointer flex items-center justify-between transition border-b border-[#242430]"
+        className="p-3 bg-[#121214] hover:bg-[#1a1a1e] cursor-pointer flex items-center justify-between transition border-b border-[#222226]"
       >
         <div className="flex items-center space-x-2">
-          {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-zinc-400" /> : <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />}
-          <span className="font-semibold text-zinc-200">Git Text Diff (renderGitText)</span>
-          <span className="text-[11px] font-mono text-zinc-500">
+          {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93]" /> : <ChevronRight className="w-3.5 h-3.5 text-[#8e8e93]" />}
+          <span className="font-semibold text-[#ffffff]">Git Text Diff (renderGitText)</span>
+          <span className="text-[11px] font-mono text-[#8e8e93]">
             ({diffResult.addedCount > 0 ? `+${diffResult.addedCount} ` : ''}
             {diffResult.modifiedCount > 0 ? `~${diffResult.modifiedCount} ` : ''}
             {diffResult.removedCount > 0 ? `-${diffResult.removedCount}` : ''})
@@ -151,9 +147,9 @@ export function GitTextPanel({ diffResult }: GitTextPanelProps) {
               e.stopPropagation();
               handleCopy();
             }}
-            className="px-2.5 py-1 bg-[#22222c] hover:bg-[#2c2c38] text-zinc-200 rounded-lg text-[11px] font-mono border border-[#323242] transition flex items-center gap-1"
+            className="px-2.5 py-1 bg-transparent hover:bg-[#1a1a1e] text-[#8e8e93] hover:text-[#ffffff] rounded-lg text-[11px] font-mono border border-[#222226] transition flex items-center gap-1"
           >
-            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? <Check className="w-3 h-3 text-[#4aa56b]" /> : <Copy className="w-3 h-3" />}
             <span>{copied ? 'Copied' : 'Copy Diff'}</span>
           </button>
         )}
@@ -161,9 +157,9 @@ export function GitTextPanel({ diffResult }: GitTextPanelProps) {
 
       {/* Collapsible content */}
       {isOpen && (
-        <div className="p-4 bg-[#0d0d10] font-mono text-[11px] overflow-x-auto max-h-80 leading-relaxed">
+        <div className="p-4 bg-[#000000] font-mono text-[11px] overflow-x-auto max-h-80 leading-relaxed">
           {gitText ? (
-            <pre className="text-zinc-200 whitespace-pre">
+            <pre className="text-[#ffffff] whitespace-pre">
               {gitText.split('\n').map((line, i) => {
                 const isHeader = line.startsWith('@@');
                 const isMinus = line.startsWith('-');
@@ -174,12 +170,12 @@ export function GitTextPanel({ diffResult }: GitTextPanelProps) {
                     key={i}
                     className={
                       isHeader
-                        ? 'text-cyan-400 font-bold py-0.5'
+                        ? 'text-[#5b8def] font-bold py-0.5'
                         : isMinus
-                        ? 'text-rose-400 bg-rose-950/40 -mx-2 px-2'
+                        ? 'text-[#c9605f] bg-[#c9605f]/12 -mx-2 px-2'
                         : isPlus
-                        ? 'text-emerald-400 bg-emerald-950/40 -mx-2 px-2'
-                        : 'text-zinc-400'
+                        ? 'text-[#4aa56b] bg-[#4aa56b]/12 -mx-2 px-2'
+                        : 'text-[#8e8e93]'
                     }
                   >
                     {line}
@@ -188,7 +184,7 @@ export function GitTextPanel({ diffResult }: GitTextPanelProps) {
               })}
             </pre>
           ) : (
-            <div className="text-zinc-500 text-center py-4 italic">
+            <div className="text-[#8e8e93] text-center py-4 italic">
               Empty diff (clean match, no changes detected).
             </div>
           )}
